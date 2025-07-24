@@ -9,8 +9,8 @@ const log = @import("log.zig").vk_kickstart_log;
 const vki = dispatch.vki;
 const vkd = dispatch.vkd;
 
-const InstanceDispatch = dispatch.InstanceDispatch;
-const DeviceDispatch = dispatch.DeviceDispatch;
+const InstanceWrapper = dispatch.InstanceWrapper;
+const DeviceWrapper = dispatch.DeviceWrapper;
 
 const Error = error{
     OutOfMemory,
@@ -18,7 +18,7 @@ const Error = error{
 };
 
 const CreateError = Error ||
-    InstanceDispatch.CreateDeviceError;
+    InstanceWrapper.CreateDeviceError;
 
 pub fn create(
     physical_device: *const PhysicalDevice,
@@ -35,7 +35,7 @@ pub fn create(
 
     const queue_create_infos = try createQueueInfos(&fba, physical_device);
 
-    var extensions_buffer: [PhysicalDevice.max_enabled_extensions][*:0]u8 = undefined;
+    var extensions_buffer: [PhysicalDevice.max_enabled_extensions][*:0]const u8 = undefined;
     const enabled_extensions = physical_device.getExtensions(&extensions_buffer);
 
     var features = vk.PhysicalDeviceFeatures2{ .features = physical_device.features };
@@ -44,11 +44,11 @@ pub fn create(
     var features_13 = physical_device.features_13;
 
     features.p_next = &features_11;
-    if (physical_device.properties.api_version >= vk.API_VERSION_1_3) {
+    if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3))) {
         features_11.p_next = &features_12;
         features_12.p_next = &features_13;
         features_13.p_next = p_next_chain;
-    } else if (physical_device.properties.api_version >= vk.API_VERSION_1_2) {
+    } else if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_2))) {
         features_11.p_next = &features_12;
         features_12.p_next = p_next_chain;
     } else {
@@ -64,7 +64,7 @@ pub fn create(
     };
 
     const handle = try vki().createDevice(physical_device.handle, &device_info, allocation_callbacks);
-    dispatch.vkd_table = try DeviceDispatch.load(handle, dispatch.vki_table.?.dispatch.vkGetDeviceProcAddr);
+    dispatch.vkd_table = DeviceWrapper.load(handle, dispatch.vki_table.?.dispatch.vkGetDeviceProcAddr.?);
     errdefer vkd().destroyDevice(handle, allocation_callbacks);
 
     if (build_options.verbose) {
@@ -88,11 +88,11 @@ pub fn create(
         printEnabledFeatures(vk.PhysicalDeviceFeatures, features.features);
         log.debug("enabled features (vulkan 1.1):", .{});
         printEnabledFeatures(vk.PhysicalDeviceVulkan11Features, features_11);
-        if (physical_device.properties.api_version >= vk.API_VERSION_1_2) {
+        if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_2))) {
             log.debug("enabled features (vulkan 1.2):", .{});
             printEnabledFeatures(vk.PhysicalDeviceVulkan12Features, features_12);
         }
-        if (physical_device.properties.api_version >= vk.API_VERSION_1_3) {
+        if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3))) {
             log.debug("enabled features (vulkan 1.3):", .{});
             printEnabledFeatures(vk.PhysicalDeviceVulkan13Features, features_13);
         }

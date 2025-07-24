@@ -1,6 +1,7 @@
 .{
-    .name = "kickstart_glfw_example",
+    .name = .kickstart_glfw_example,
     .version = "0.0.0",
+    .fingerprint = 0x133522ddf1ea8fde,
     .dependencies = .{
         .glfw = .{
             .url = "https://pkg.machengine.org/glfw/e6f377baed70a7bef9fa08d808f40b64c5136bf6.tar.gz",

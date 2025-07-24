@@ -8,8 +8,8 @@ const root = @import("root");
 const log = @import("log.zig").vk_kickstart_log;
 const vk_log = @import("log.zig").vulkan_log;
 
-const BaseDispatch = dispatch.BaseDispatch;
-const InstanceDispatch = dispatch.InstanceDispatch;
+const DeviceWrapper = dispatch.DeviceWrapper;
+const InstanceWrapper = dispatch.InstanceWrapper;
 
 const vkb = dispatch.vkb;
 const vki = dispatch.vki;
@@ -60,7 +60,7 @@ pub const CreateOptions = struct {
     /// Engine version.
     engine_version: u32 = 0,
     /// Required Vulkan version (minimum 1.1).
-    required_api_version: u32 = vk.API_VERSION_1_1,
+    required_api_version: u32 = @bitCast(vk.API_VERSION_1_1),
     /// Array of required extensions to enable.
     /// Note: VK_KHR_surface and the platform specific surface extension are automatically enabled.
     required_extensions: []const [*:0]const u8 = &.{},
@@ -99,19 +99,19 @@ const Error = error{
 };
 
 pub const CreateError = Error ||
-    BaseDispatch.EnumerateInstanceExtensionPropertiesError ||
-    BaseDispatch.EnumerateInstanceLayerPropertiesError ||
-    BaseDispatch.CreateInstanceError;
+    vk.BaseWrapper.EnumerateInstanceExtensionPropertiesError ||
+    vk.BaseWrapper.EnumerateInstanceLayerPropertiesError ||
+    vk.BaseWrapper.CreateInstanceError;
 
 pub fn create(
     loader: anytype,
     options: CreateOptions,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) CreateError!vk.Instance {
-    dispatch.vkb_table = try BaseDispatch.load(loader);
+    dispatch.vkb_table = vk.BaseWrapper.load(loader);
 
     const api_version = try getAppropriateApiVersion(options.required_api_version);
-    if (api_version < vk.API_VERSION_1_1) return error.UnsupportedInstanceVersion;
+    if (api_version < @as(u32, @bitCast(vk.API_VERSION_1_1))) return error.UnsupportedInstanceVersion;
 
     const app_info = vk.ApplicationInfo{
         .p_application_name = options.app_name,
@@ -150,17 +150,13 @@ pub fn create(
     };
 
     const instance = try vkb().createInstance(&instance_info, allocation_callbacks);
-    dispatch.vki_table = try InstanceDispatch.load(instance, vkb().dispatch.vkGetInstanceProcAddr);
+    dispatch.vki_table = InstanceWrapper.load(instance, vkb().dispatch.vkGetInstanceProcAddr.?);
     errdefer vki().destroyInstance(instance, options.allocation_callbacks);
 
     if (build_options.verbose) {
         log.debug("----- instance creation -----", .{});
 
-        log.debug("api version: {d}.{d}.{d}", .{
-            vk.apiVersionMajor(api_version),
-            vk.apiVersionMinor(api_version),
-            vk.apiVersionPatch(api_version),
-        });
+        log.debug("api version: {}", .{api_version});
 
         log.debug("validation layers: {s}", .{if (build_options.enable_validation) "enabled" else "disabled"});
 

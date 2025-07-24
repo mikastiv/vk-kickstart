@@ -11,8 +11,8 @@ const log = @import("log.zig").vk_kickstart_log;
 const vki = dispatch.vki;
 const vkd = dispatch.vkd;
 
-const InstanceDispatch = dispatch.InstanceDispatch;
-const DeviceDispatch = dispatch.DeviceDispatch;
+const InstanceWrapper = dispatch.InstanceWrapper;
+const DeviceWrapper = dispatch.DeviceWrapper;
 
 const vkk_options = if (@hasDecl(root, "vkk_options")) root.vkk_options else struct {};
 const swapchain_override = if (@hasDecl(vkk_options, "swapchain_override")) vkk_options.swapchain_override else struct {};
@@ -92,10 +92,10 @@ const Error = error{
 };
 
 pub const CreateError = Error ||
-    InstanceDispatch.GetPhysicalDeviceSurfaceCapabilitiesKHRError ||
-    InstanceDispatch.GetPhysicalDeviceSurfaceFormatsKHRError ||
-    InstanceDispatch.GetPhysicalDeviceSurfacePresentModesKHRError ||
-    DeviceDispatch.CreateSwapchainKHRError;
+    InstanceWrapper.GetPhysicalDeviceSurfaceCapabilitiesKHRError ||
+    InstanceWrapper.GetPhysicalDeviceSurfaceFormatsKHRError ||
+    InstanceWrapper.GetPhysicalDeviceSurfacePresentModesKHRError ||
+    DeviceWrapper.CreateSwapchainKHRError;
 
 pub fn create(
     device: vk.Device,
@@ -181,7 +181,7 @@ pub fn create(
     };
 }
 
-pub const GetImagesError = error{GetSwapchainImagesFailed} || DeviceDispatch.GetSwapchainImagesKHRError;
+pub const GetImagesError = error{GetSwapchainImagesFailed} || DeviceWrapper.GetSwapchainImagesKHRError;
 
 /// Returns an array of the swapchain's images.
 ///
@@ -200,7 +200,7 @@ pub fn getImages(self: *const Swapchain, buffer: []vk.Image) GetImagesError!void
 }
 
 pub const GetImagesAllocError = error{ OutOfMemory, GetSwapchainImagesFailed } ||
-    DeviceDispatch.GetSwapchainImagesKHRError;
+    DeviceWrapper.GetSwapchainImagesKHRError;
 
 /// Returns an array of the swapchain's images.
 ///
@@ -221,7 +221,7 @@ pub fn getImagesAlloc(self: *const Swapchain, allocator: std.mem.Allocator) GetI
     return images;
 }
 
-pub const GetImageViewsError = DeviceDispatch.CreateImageViewError;
+pub const GetImageViewsError = DeviceWrapper.CreateImageViewError;
 
 /// Returns an array of image views to the images.
 ///
@@ -266,7 +266,7 @@ pub fn getImageViews(
     }
 }
 
-pub const GetImageViewsErrorAlloc = error{OutOfMemory} || DeviceDispatch.CreateImageViewError;
+pub const GetImageViewsErrorAlloc = error{OutOfMemory} || DeviceWrapper.CreateImageViewError;
 
 /// Returns an array of image views to the images.
 ///

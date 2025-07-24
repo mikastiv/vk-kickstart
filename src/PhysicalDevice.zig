@@ -11,7 +11,7 @@ const log = @import("log.zig").vk_kickstart_log;
 const vkb = dispatch.vkb;
 const vki = dispatch.vki;
 
-const InstanceDispatch = dispatch.InstanceDispatch;
+const InstanceWrapper = dispatch.InstanceWrapper;
 
 const vkk_options = if (@hasDecl(root, "vkk_options")) root.vkk_options else struct {};
 const physical_device_override = if (@hasDecl(vkk_options, "physical_device_override")) vkk_options.physical_device_override else struct {};
@@ -89,7 +89,7 @@ pub const SelectOptions = struct {
     /// Name of the device to select.
     name: ?[*:0]const u8 = null,
     /// Required Vulkan version (minimum 1.1).
-    required_api_version: u32 = vk.API_VERSION_1_1,
+    required_api_version: u32 = @bitCast(vk.API_VERSION_1_1),
     /// Prefered physical device type.
     preferred_type: vk.PhysicalDeviceType = .discrete_gpu,
     /// Transfer queue preference.
@@ -121,17 +121,17 @@ const Error = error{
 };
 
 pub const SelectError = Error ||
-    InstanceDispatch.EnumeratePhysicalDevicesError ||
-    InstanceDispatch.EnumerateDeviceExtensionPropertiesError ||
-    InstanceDispatch.GetPhysicalDeviceSurfaceSupportKHRError ||
-    InstanceDispatch.GetPhysicalDeviceSurfaceFormatsKHRError;
+    InstanceWrapper.EnumeratePhysicalDevicesError ||
+    InstanceWrapper.EnumerateDeviceExtensionPropertiesError ||
+    InstanceWrapper.GetPhysicalDeviceSurfaceSupportKHRError ||
+    InstanceWrapper.GetPhysicalDeviceSurfaceFormatsKHRError;
 
 pub fn select(
     instance: vk.Instance,
     options: SelectOptions,
 ) SelectError!PhysicalDevice {
     std.debug.assert(instance != .null_handle);
-    std.debug.assert(options.required_api_version >= vk.API_VERSION_1_1);
+    std.debug.assert(options.required_api_version >= @as(u32, @bitCast(vk.API_VERSION_1_1)));
     std.debug.assert(options.surface != .null_handle);
 
     const physical_device_handles = try getPhysicalDevices(instance);
@@ -160,9 +160,9 @@ pub fn select(
 
             log.debug(" suitable: {s}", .{if (info.suitable) "yes" else "no"});
             log.debug(" api version: {d}.{d}.{d}", .{
-                vk.apiVersionMajor(info.properties.api_version),
-                vk.apiVersionMinor(info.properties.api_version),
-                vk.apiVersionPatch(info.properties.api_version),
+                @as(*const vk.Version, @ptrCast(&info.properties.api_version)).major,
+                @as(*const vk.Version, @ptrCast(&info.properties.api_version)).minor,
+                @as(*const vk.Version, @ptrCast(&info.properties.api_version)).patch,
             });
             log.debug(" device type: {s}", .{@tagName(info.properties.device_type)});
             const local_memory_size = getLocalMemorySize(&info.memory_properties);
@@ -188,11 +188,11 @@ pub fn select(
             printAvailableFeatures(vk.PhysicalDeviceFeatures, info.features);
             log.debug(" available features (vulkan 1.1):", .{});
             printAvailableFeatures(vk.PhysicalDeviceVulkan11Features, info.features_11);
-            if (info.properties.api_version >= vk.API_VERSION_1_2) {
+            if (info.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_2))) {
                 log.debug(" available features (vulkan 1.2):", .{});
                 printAvailableFeatures(vk.PhysicalDeviceVulkan12Features, info.features_12);
             }
-            if (info.properties.api_version >= vk.API_VERSION_1_3) {
+            if (info.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3))) {
                 log.debug(" available features (vulkan 1.3):", .{});
                 printAvailableFeatures(vk.PhysicalDeviceVulkan13Features, info.features_13);
             }
@@ -643,9 +643,9 @@ fn getPhysicalDeviceInfo(
     var features_13 = vk.PhysicalDeviceVulkan13Features{};
 
     features.p_next = &features_11;
-    if (api_version >= vk.API_VERSION_1_2)
+    if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_2)))
         features_11.p_next = &features_12;
-    if (api_version >= vk.API_VERSION_1_3)
+    if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3)))
         features_12.p_next = &features_13;
 
     vki().getPhysicalDeviceFeatures2(handle, &features);
