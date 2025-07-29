@@ -2,7 +2,6 @@ const std = @import("std");
 const c = @import("c.zig");
 const vk = @import("vulkan");
 const vkk = @import("vk-kickstart");
-const dispatch = @import("dispatch.zig");
 const Window = @import("Window.zig");
 const GraphicsContext = @import("GraphicsContext.zig");
 const Device = GraphicsContext.Device;
@@ -55,10 +54,10 @@ const window_width = 800;
 const window_height = 600;
 
 pub fn main() !void {
+    _ = c.glfwSetErrorCallback(errorCallback);
+
     if (c.glfwInit() == c.GLFW_FALSE) return error.GlfwInitFailed;
     defer c.glfwTerminate();
-
-    _ = c.glfwSetErrorCallback(errorCallback);
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();

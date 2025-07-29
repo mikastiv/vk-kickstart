@@ -3,15 +3,14 @@ const vkk = @import("vk-kickstart");
 const std = @import("std");
 const Window = @import("Window.zig");
 const c = @import("c.zig");
-const dispatch = @import("dispatch.zig");
 const GraphicsContext = @This();
 
-pub const InstanceDispatch = vk.InstanceWrapper(dispatch.apis);
-pub const DeviceDispatch = vk.DeviceWrapper(dispatch.apis);
-pub const Instance = vk.InstanceProxy(dispatch.apis);
-pub const Device = vk.DeviceProxy(dispatch.apis);
-pub const Queue = vk.QueueProxy(dispatch.apis);
-pub const CommandBuffer = vk.CommandBufferProxy(dispatch.apis);
+pub const InstanceDispatch = vk.InstanceWrapper;
+pub const DeviceDispatch = vk.DeviceWrapper;
+pub const Instance = vk.InstanceProxy;
+pub const Device = vk.DeviceProxy;
+pub const Queue = vk.QueueProxy;
+pub const CommandBuffer = vk.CommandBufferProxy;
 
 vki: *InstanceDispatch,
 vkd: *DeviceDispatch,
@@ -37,7 +36,7 @@ pub fn init(allocator: std.mem.Allocator, window: *const Window) !GraphicsContex
         .{ .required_api_version = vk.API_VERSION_1_3 },
         null,
     );
-    vki.* = try InstanceDispatch.load(instance_handle, c.glfwGetInstanceProcAddress);
+    vki.* = InstanceDispatch.load(instance_handle, c.glfwGetInstanceProcAddress);
     const instance = Instance.init(instance_handle, vki);
     errdefer instance.destroyInstance(null);
 
@@ -49,7 +48,6 @@ pub fn init(allocator: std.mem.Allocator, window: *const Window) !GraphicsContex
 
     const physical_device = try vkk.PhysicalDevice.select(instance.handle, .{
         .surface = surface,
-        .transfer_queue = .dedicated,
         .required_api_version = vk.API_VERSION_1_2,
         .required_extensions = &.{
             vk.extensions.khr_ray_tracing_pipeline.name,
@@ -73,7 +71,7 @@ pub fn init(allocator: std.mem.Allocator, window: *const Window) !GraphicsContex
     };
 
     const device_handle = try vkk.device.create(&physical_device, @ptrCast(&rt_features), null);
-    vkd.* = try DeviceDispatch.load(device_handle, vki.dispatch.vkGetDeviceProcAddr);
+    vkd.* = DeviceDispatch.load(device_handle, vki.dispatch.vkGetDeviceProcAddr.?);
     const device = Device.init(device_handle, vkd);
     errdefer device.destroyDevice(null);
 

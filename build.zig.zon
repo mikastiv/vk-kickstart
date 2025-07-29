@@ -2,11 +2,11 @@
     .name = .vk_kickstart,
     .version = "0.1.0",
     .fingerprint = 0x1bec8158f4443760,
-    //.minimum_zig_version = "0.11.0",
+    .minimum_zig_version = "0.14.1",
     .dependencies = .{
         .vulkan = .{
-            .url = "git+https://github.com/Snektron/vulkan-zig.git#2846d415d8c9f96c1675944d0762745422fe7aa0",
-            .hash = "vulkan-0.0.0-r7Ytx25WAwBqA-Qx5n7Hj1yZFEo_IwctejwitvrfL1k5",
+            .url = "git+https://github.com/Snektron/vulkan-zig.git#c66bddee009a8c4b71082ab7af723ed885161650",
+            .hash = "vulkan-0.0.0-r7YtxwZVAwDbCFXX5GpnS436SfBec9INY0zq-2OQ2BUp",
         },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src", "LICENSE", "README.md", "vk.xml" },

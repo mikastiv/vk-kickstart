@@ -4,11 +4,15 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{
-        .name = "kickstart_glfw_example",
+    const root_module = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+    });
+
+    const exe = b.addExecutable(.{
+        .name = "kickstart_glfw_example",
+        .root_module = root_module,
     });
 
     const xml_path: []const u8 = b.pathFromRoot("vk.xml");
@@ -31,6 +35,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseFast,
     });
     exe.linkLibrary(glfw.artifact("glfw"));
+    exe.linkSystemLibrary("GL");
 
     addShader(b, exe, "shaders/shader.vert", "shader_vert");
     addShader(b, exe, "shaders/shader.frag", "shader_frag");

@@ -2,7 +2,7 @@ const std = @import("std");
 const build_options = @import("build_options");
 const vk = @import("vulkan");
 const dispatch = @import("dispatch.zig");
-const Instance = @import("Instance.zig");
+const Instance = @import("instance.zig");
 const root = @import("root");
 const PhysicalDevice = @This();
 
@@ -89,7 +89,7 @@ pub const SelectOptions = struct {
     /// Name of the device to select.
     name: ?[*:0]const u8 = null,
     /// Required Vulkan version (minimum 1.1).
-    required_api_version: u32 = @bitCast(vk.API_VERSION_1_1),
+    required_api_version: vk.Version = vk.API_VERSION_1_1,
     /// Prefered physical device type.
     preferred_type: vk.PhysicalDeviceType = .discrete_gpu,
     /// Transfer queue preference.
@@ -131,7 +131,8 @@ pub fn select(
     options: SelectOptions,
 ) SelectError!PhysicalDevice {
     std.debug.assert(instance != .null_handle);
-    std.debug.assert(options.required_api_version >= @as(u32, @bitCast(vk.API_VERSION_1_1)));
+    const version_order = orderVersions(options.required_api_version, vk.API_VERSION_1_1);
+    std.debug.assert(version_order == .gt or version_order == .eq);
     std.debug.assert(options.surface != .null_handle);
 
     const physical_device_handles = try getPhysicalDevices(instance);
@@ -412,7 +413,8 @@ fn isDeviceSuitable(
         if (std.mem.orderZ(u8, n, device_name) != .eq) return false;
     }
 
-    if (device.properties.api_version < options.required_api_version) return false;
+    const version_order = orderVersions(@bitCast(device.properties.api_version), options.required_api_version);
+    if (version_order == .lt) return false;
 
     if (options.transfer_queue == .dedicated and device.dedicated_transfer_queue_index == null) return false;
     if (options.transfer_queue == .separate and device.separate_transfer_queue_index == null) return false;
@@ -728,4 +730,12 @@ fn getPhysicalDevices(instance: vk.Instance) !PhysicalDeviceHandlesArray {
     }
 
     return physical_devices;
+}
+
+fn orderVersions(a: vk.Version, b: vk.Version) std.math.Order {
+    if (a.major < b.major) return .lt;
+    if (a.major > b.major) return .gt;
+    if (a.minor < b.minor) return .lt;
+    if (a.minor > b.minor) return .gt;
+    return .eq;
 }

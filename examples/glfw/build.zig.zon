@@ -1,18 +1,19 @@
 .{
     .name = .kickstart_glfw_example,
     .version = "0.0.0",
+    .minimum_zig_version = "0.14.1",
     .fingerprint = 0x133522ddf1ea8fde,
     .dependencies = .{
         .glfw = .{
-            .url = "https://pkg.machengine.org/glfw/e6f377baed70a7bef9fa08d808f40b64c5136bf6.tar.gz",
-            .hash = "1220c15e66c13f9633fcfd50b5ed265f74f2950c98b1f1defd66298fa027765e0190",
+            .url = "git+https://github.com/allyourcodebase/glfw.git#98607df9bce062c7fd837d58fafa06dae22edb04",
+            .hash = "glfw-0.0.0-R5AeUm0HGgA_Rlrr9HR91ejkGd-K_JyCjkXz_U3b-jp9",
         },
         .vk_kickstart = .{
             .path = "../../",
         },
         .vulkan = .{
-            .url = "git+https://github.com/Snektron/vulkan-zig#e43d635893de4c8b89d5ca8aa142984872b7e68f",
-            .hash = "122064f889ea10097a67fc28744fe95d0bfde9af252de147a9b90aa55cecfc30c01c",
+            .url = "git+https://github.com/Snektron/vulkan-zig.git#c66bddee009a8c4b71082ab7af723ed885161650",
+            .hash = "vulkan-0.0.0-r7YtxwZVAwDbCFXX5GpnS436SfBec9INY0zq-2OQ2BUp",
         },
     },
     .paths = .{

@@ -60,7 +60,7 @@ pub const CreateOptions = struct {
     /// Engine version.
     engine_version: u32 = 0,
     /// Required Vulkan version (minimum 1.1).
-    required_api_version: u32 = @bitCast(vk.API_VERSION_1_1),
+    required_api_version: vk.Version = vk.API_VERSION_1_1,
     /// Array of required extensions to enable.
     /// Note: VK_KHR_surface and the platform specific surface extension are automatically enabled.
     required_extensions: []const [*:0]const u8 = &.{},
@@ -388,10 +388,10 @@ fn getAvailableLayers() !AvailableLayersArray {
     return layers;
 }
 
-fn getAppropriateApiVersion(required_version: u32) !u32 {
+fn getAppropriateApiVersion(required_version: vk.Version) !u32 {
     const instance_version = try vkb().enumerateInstanceVersion();
 
-    if (instance_version < required_version)
+    if (instance_version < @as(u32, @bitCast(required_version)))
         return error.RequiredVersionNotAvailable;
     return instance_version;
 }
