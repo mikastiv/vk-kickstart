@@ -111,14 +111,15 @@ pub fn create(
     dispatch.vkb_table = vk.BaseWrapper.load(loader);
 
     const api_version = try getAppropriateApiVersion(options.required_api_version);
-    if (api_version < @as(u32, @bitCast(vk.API_VERSION_1_1))) return error.UnsupportedInstanceVersion;
+    if (@as(u32, @bitCast(api_version)) < @as(u32, @bitCast(vk.API_VERSION_1_1)))
+        return error.UnsupportedInstanceVersion;
 
     const app_info = vk.ApplicationInfo{
         .p_application_name = options.app_name,
         .application_version = options.app_version,
         .p_engine_name = options.engine_name,
         .engine_version = options.engine_version,
-        .api_version = api_version,
+        .api_version = @bitCast(api_version),
     };
 
     const available_extensions = try getAvailableExtensions();
@@ -156,7 +157,7 @@ pub fn create(
     if (build_options.verbose) {
         log.debug("----- instance creation -----", .{});
 
-        log.debug("api version: {}", .{api_version});
+        log.debug("api version: {}.{}.{}", .{ api_version.major, api_version.minor, api_version.patch });
 
         log.debug("validation layers: {s}", .{if (build_options.enable_validation) "enabled" else "disabled"});
 
@@ -388,10 +389,10 @@ fn getAvailableLayers() !AvailableLayersArray {
     return layers;
 }
 
-fn getAppropriateApiVersion(required_version: vk.Version) !u32 {
+fn getAppropriateApiVersion(required_version: vk.Version) !vk.Version {
     const instance_version = try vkb().enumerateInstanceVersion();
 
     if (instance_version < @as(u32, @bitCast(required_version)))
         return error.RequiredVersionNotAvailable;
-    return instance_version;
+    return @bitCast(instance_version);
 }

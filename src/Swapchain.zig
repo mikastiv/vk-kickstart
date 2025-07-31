@@ -28,6 +28,8 @@ else
 /// Max number of present modes.
 pub const max_present_modes = @typeInfo(vk.PresentModeKHR).@"enum".fields.len;
 
+const default_image_count = 3;
+
 const SurfaceFormatsArray = std.BoundedArray(vk.SurfaceFormatKHR, max_surface_formats);
 const PresentModesArray = std.BoundedArray(vk.PresentModeKHR, max_present_modes);
 
@@ -372,19 +374,14 @@ fn pickExtent(
 
 fn selectMinImageCount(capabilities: *const vk.SurfaceCapabilitiesKHR, desired_min_image_count: ?u32) u32 {
     const has_max_count = capabilities.max_image_count > 0;
+    const target_image_count = desired_min_image_count orelse default_image_count;
     var image_count = capabilities.min_image_count;
-    if (desired_min_image_count) |desired| {
-        if (desired < capabilities.min_image_count)
-            image_count = capabilities.min_image_count
-        else if (has_max_count and desired > capabilities.max_image_count)
-            image_count = capabilities.max_image_count
-        else
-            image_count = desired;
-    } else if (has_max_count) {
-        image_count = @min(capabilities.min_image_count + 1, capabilities.max_image_count);
-    } else {
-        image_count = capabilities.min_image_count + 1;
-    }
+    if (target_image_count < capabilities.min_image_count)
+        image_count = capabilities.min_image_count
+    else if (has_max_count and target_image_count > capabilities.max_image_count)
+        image_count = capabilities.max_image_count
+    else
+        image_count = target_image_count;
 
     return image_count;
 }

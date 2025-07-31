@@ -36,7 +36,7 @@ const max_frames_in_flight = 2;
 
 const SyncObjects = struct {
     image_available_semaphores: [max_frames_in_flight]vk.Semaphore,
-    render_finished_semaphores: [max_frames_in_flight]vk.Semaphore,
+    render_finished_semaphores: []vk.Semaphore,
     in_flight_fences: [max_frames_in_flight]vk.Fence,
 };
 
@@ -106,8 +106,8 @@ pub fn main() !void {
     var framebuffers = try createFramebuffers(allocator, device, swapchain.extent, swapchain.image_count, image_views, render_pass);
     defer destroyFramebuffers(allocator, device, framebuffers);
 
-    const sync = try createSyncObjects(device);
-    defer destroySyncObjects(device, sync);
+    const sync = try createSyncObjects(allocator, device, swapchain.image_count);
+    defer destroySyncObjects(allocator, device, sync);
 
     const vertex_shader_bytes align(@alignOf(u32)) = @embedFile("shader_vert").*;
     const vertex_shader = try createShaderModule(device, &vertex_shader_bytes);
@@ -176,7 +176,7 @@ pub fn main() !void {
 
         const frame_sync_objects = FrameSyncObjects{
             .image_available_semaphore = sync.image_available_semaphores[current_frame],
-            .render_finished_semaphore = sync.render_finished_semaphores[current_frame],
+            .render_finished_semaphore = sync.render_finished_semaphores[image_index],
             .in_flight_fence = sync.in_flight_fences[current_frame],
         };
         if (!try drawFrame(
@@ -305,7 +305,7 @@ fn destroyFramebuffers(allocator: std.mem.Allocator, device: Device, framebuffer
     allocator.free(framebuffers);
 }
 
-fn destroySyncObjects(device: Device, sync: SyncObjects) void {
+fn destroySyncObjects(allocator: std.mem.Allocator, device: Device, sync: SyncObjects) void {
     for (sync.image_available_semaphores) |semaphore| {
         device.destroySemaphore(semaphore, null);
     }
@@ -315,6 +315,7 @@ fn destroySyncObjects(device: Device, sync: SyncObjects) void {
     for (sync.in_flight_fences) |fence| {
         device.destroyFence(fence, null);
     }
+    allocator.free(sync.render_finished_semaphores);
 }
 
 fn recordCommandBuffer(
@@ -514,9 +515,9 @@ fn createShaderModule(device: Device, bytecode: []align(4) const u8) !vk.ShaderM
     return device.createShaderModule(&create_info, null);
 }
 
-fn createSyncObjects(device: Device) !SyncObjects {
+fn createSyncObjects(allocator: std.mem.Allocator, device: Device, image_count: u32) !SyncObjects {
     var image_available_semaphores = [_]vk.Semaphore{.null_handle} ** max_frames_in_flight;
-    var render_finished_semaphores = [_]vk.Semaphore{.null_handle} ** max_frames_in_flight;
+    const render_finished_semaphores = try allocator.alloc(vk.Semaphore, image_count);
     var in_flight_fences = [_]vk.Fence{.null_handle} ** max_frames_in_flight;
     errdefer {
         for (image_available_semaphores) |semaphore| {
@@ -537,8 +538,10 @@ fn createSyncObjects(device: Device) !SyncObjects {
     const fence_info = vk.FenceCreateInfo{ .flags = .{ .signaled_bit = true } };
     for (0..max_frames_in_flight) |i| {
         image_available_semaphores[i] = try device.createSemaphore(&semaphore_info, null);
-        render_finished_semaphores[i] = try device.createSemaphore(&semaphore_info, null);
         in_flight_fences[i] = try device.createFence(&fence_info, null);
+    }
+    for (render_finished_semaphores) |*render_semaphore| {
+        render_semaphore.* = try device.createSemaphore(&semaphore_info, null);
     }
 
     return .{
