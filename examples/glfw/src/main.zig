@@ -169,7 +169,6 @@ pub fn main() !void {
             }
             return err;
         };
-        std.debug.assert(next_image_result.result == .success);
 
         const image_index = next_image_result.image_index;
         try recordCommandBuffer(&ctx, command_buffers[current_frame], pipeline, render_pass, framebuffers[image_index], swapchain.extent);
@@ -289,7 +288,7 @@ fn recreateSwapchain(
     framebuffers.* = try createFramebuffers(
         allocator,
         ctx.device,
-        extent,
+        swapchain.extent,
         swapchain.image_count,
         image_views.*,
         render_pass,
