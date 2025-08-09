@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -15,20 +15,15 @@ pub fn build(b: *std.Build) void {
         .root_module = root_module,
     });
 
-    const xml_path: []const u8 = b.pathFromRoot("vk.xml");
-
-    const vkzig_dep = b.dependency("vulkan", .{
-        .registry = xml_path,
-    });
-
-    const kickstart_dep = b.dependency("vk_kickstart", .{
-        .registry = xml_path,
+    const registry = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
+    const vk_kickstart = b.dependency("vk_kickstart", .{
+        .registry = registry,
         .enable_validation = if (optimize == .Debug) true else false,
         .verbose = true,
     });
 
-    exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
-    exe.root_module.addImport("vulkan", vkzig_dep.module("vulkan-zig"));
+    exe.root_module.addImport("vk-kickstart", vk_kickstart.module("vk-kickstart"));
+    exe.root_module.addImport("vulkan", vk_kickstart.module("vulkan"));
 
     const glfw = b.dependency("glfw", .{
         .target = target,

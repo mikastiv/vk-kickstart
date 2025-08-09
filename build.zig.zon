@@ -8,6 +8,16 @@
             .url = "git+https://github.com/Snektron/vulkan-zig.git#c66bddee009a8c4b71082ab7af723ed885161650",
             .hash = "vulkan-0.0.0-r7YtxwZVAwDbCFXX5GpnS436SfBec9INY0zq-2OQ2BUp",
         },
+        .vulkan_headers = .{
+            .url = "git+https://github.com/KhronosGroup/Vulkan-Headers#2e0a6e699e35c9609bde2ca4abb0d380c0378639",
+            .hash = "N-V-__8AACJA9gH2PXN1QZ9vF1oi8qUvJMRdX8ZZRTA5lova",
+        },
     },
-    .paths = .{ "build.zig", "build.zig.zon", "src", "LICENSE", "README.md", "vk.xml" },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
 }
