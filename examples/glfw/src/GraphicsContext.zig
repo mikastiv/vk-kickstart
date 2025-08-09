@@ -12,8 +12,7 @@ pub const Device = vk.DeviceProxy;
 pub const Queue = vk.QueueProxy;
 pub const CommandBuffer = vk.CommandBufferProxy;
 
-vki: *InstanceDispatch,
-vkd: *DeviceDispatch,
+allocator: std.mem.Allocator,
 instance: Instance,
 debug_messenger: ?vk.DebugUtilsMessengerEXT,
 device: Device,
@@ -25,28 +24,21 @@ graphics_queue: Queue,
 present_queue: Queue,
 
 pub fn init(allocator: std.mem.Allocator, window: *const Window) !GraphicsContext {
-    const vki = try allocator.create(InstanceDispatch);
-    errdefer allocator.destroy(vki);
-
-    const vkd = try allocator.create(DeviceDispatch);
-    errdefer allocator.destroy(vkd);
-
-    const instance_handle = try vkk.instance.create(
+    const instance = try vkk.instance.create(
+        allocator,
         c.glfwGetInstanceProcAddress,
         .{ .required_api_version = vk.API_VERSION_1_3 },
         null,
     );
-    vki.* = InstanceDispatch.load(instance_handle, c.glfwGetInstanceProcAddress);
-    const instance = Instance.init(instance_handle, vki);
     errdefer instance.destroyInstance(null);
 
-    const debug_messenger = try vkk.instance.createDebugMessenger(instance.handle, .{}, null);
-    errdefer vkk.instance.destroyDebugMessenger(instance.handle, debug_messenger, null);
+    const debug_messenger = try vkk.instance.createDebugMessenger(instance, .{}, null);
+    errdefer vkk.instance.destroyDebugMessenger(instance, debug_messenger, null);
 
     const surface = try window.createSurface(instance.handle);
     errdefer instance.destroySurfaceKHR(surface, null);
 
-    const physical_device = try vkk.PhysicalDevice.select(instance.handle, .{
+    const physical_device = try vkk.PhysicalDevice.select(allocator, instance, .{
         .surface = surface,
         .required_api_version = vk.API_VERSION_1_2,
         .required_extensions = &.{
@@ -63,6 +55,7 @@ pub fn init(allocator: std.mem.Allocator, window: *const Window) !GraphicsContex
             .descriptor_indexing = vk.TRUE,
         },
     });
+    errdefer physical_device.deinit();
 
     std.log.info("selected {s}", .{physical_device.name()});
 
@@ -70,21 +63,18 @@ pub fn init(allocator: std.mem.Allocator, window: *const Window) !GraphicsContex
         .ray_tracing_pipeline = vk.TRUE,
     };
 
-    const device_handle = try vkk.device.create(&physical_device, @ptrCast(&rt_features), null);
-    vkd.* = DeviceDispatch.load(device_handle, vki.dispatch.vkGetDeviceProcAddr.?);
-    const device = Device.init(device_handle, vkd);
+    const device = try vkk.device.create(allocator, instance, &physical_device, @ptrCast(&rt_features), null);
     errdefer device.destroyDevice(null);
 
     const graphics_queue_index = physical_device.graphics_queue_index;
     const present_queue_index = physical_device.present_queue_index;
     const graphics_queue_handle = device.getDeviceQueue(graphics_queue_index, 0);
     const present_queue_handle = device.getDeviceQueue(present_queue_index, 0);
-    const graphics_queue = Queue.init(graphics_queue_handle, vkd);
-    const present_queue = Queue.init(present_queue_handle, vkd);
+    const graphics_queue = Queue.init(graphics_queue_handle, device.wrapper);
+    const present_queue = Queue.init(present_queue_handle, device.wrapper);
 
     return .{
-        .vki = vki,
-        .vkd = vkd,
+        .allocator = allocator,
         .instance = instance,
         .debug_messenger = debug_messenger,
         .device = device,
@@ -97,11 +87,12 @@ pub fn init(allocator: std.mem.Allocator, window: *const Window) !GraphicsContex
     };
 }
 
-pub fn deinit(self: *GraphicsContext, allocator: std.mem.Allocator) void {
+pub fn deinit(self: *GraphicsContext) void {
     self.device.destroyDevice(null);
     self.instance.destroySurfaceKHR(self.surface, null);
-    vkk.instance.destroyDebugMessenger(self.instance.handle, self.debug_messenger, null);
+    self.physical_device.deinit();
+    vkk.instance.destroyDebugMessenger(self.instance, self.debug_messenger, null);
     self.instance.destroyInstance(null);
-    allocator.destroy(self.vki);
-    allocator.destroy(self.vkd);
+    self.allocator.destroy(self.instance.wrapper);
+    self.allocator.destroy(self.device.wrapper);
 }

@@ -1,40 +1,19 @@
 const std = @import("std");
 const build_options = @import("build_options");
 const vk = @import("vulkan");
-const Device = @import("device.zig");
 const dispatch = @import("dispatch.zig");
 const Swapchain = @This();
 const root = @import("root");
+const Allocator = std.mem.Allocator;
+const Instance = vk.InstanceProxy;
+const Device = vk.DeviceProxy;
 
 const log = @import("log.zig").vk_kickstart_log;
 
-const vki = dispatch.vki;
-const vkd = dispatch.vkd;
-
-const InstanceWrapper = dispatch.InstanceWrapper;
-const DeviceWrapper = dispatch.DeviceWrapper;
-
-const vkk_options = if (@hasDecl(root, "vkk_options")) root.vkk_options else struct {};
-const swapchain_override = if (@hasDecl(vkk_options, "swapchain_override")) vkk_options.swapchain_override else struct {};
-
-/// Max number of surface formats.
-///
-/// Can be overriden in root.
-pub const max_surface_formats = if (@hasDecl(swapchain_override, "max_surface_formats"))
-    swapchain_override.max_surface_formats
-else
-    32;
-
-/// Max number of present modes.
-pub const max_present_modes = @typeInfo(vk.PresentModeKHR).@"enum".fields.len;
-
 const default_image_count = 3;
 
-const SurfaceFormatsArray = std.BoundedArray(vk.SurfaceFormatKHR, max_surface_formats);
-const PresentModesArray = std.BoundedArray(vk.PresentModeKHR, max_present_modes);
-
 handle: vk.SwapchainKHR,
-device: vk.Device,
+device: Device,
 surface: vk.SurfaceKHR,
 image_count: u32,
 min_image_count: u32,
@@ -94,13 +73,16 @@ const Error = error{
 };
 
 pub const CreateError = Error ||
-    InstanceWrapper.GetPhysicalDeviceSurfaceCapabilitiesKHRError ||
-    InstanceWrapper.GetPhysicalDeviceSurfaceFormatsKHRError ||
-    InstanceWrapper.GetPhysicalDeviceSurfacePresentModesKHRError ||
-    DeviceWrapper.CreateSwapchainKHRError;
+    Allocator.Error ||
+    Instance.GetPhysicalDeviceSurfaceCapabilitiesKHRError ||
+    Instance.GetPhysicalDeviceSurfaceFormatsKHRError ||
+    Instance.GetPhysicalDeviceSurfacePresentModesKHRError ||
+    Device.CreateSwapchainKHRError;
 
 pub fn create(
-    device: vk.Device,
+    allocator: Allocator,
+    instance: Instance,
+    device: Device,
     physical_device: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
     options: CreateOptions,
@@ -108,24 +90,30 @@ pub fn create(
 ) CreateError!Swapchain {
     std.debug.assert(surface != .null_handle);
     std.debug.assert(physical_device != .null_handle);
-    std.debug.assert(device != .null_handle);
+    std.debug.assert(device.handle != .null_handle);
 
-    const surface_support = try getSurfaceSupportDetails(physical_device, surface);
+    const capabilities = try instance.getPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface);
 
-    const min_image_count = selectMinImageCount(&surface_support.capabilities, options.desired_min_image_count);
-    const format = pickSurfaceFormat(surface_support.formats.constSlice(), options.desired_formats);
-    const present_mode = pickPresentMode(surface_support.present_modes.constSlice(), options.desired_present_modes);
-    const extent = pickExtent(&surface_support.capabilities, options.desired_extent);
+    const formats = try instance.getPhysicalDeviceSurfaceFormatsAllocKHR(physical_device, surface, allocator);
+    defer allocator.free(formats);
 
-    const array_layer_count = if (surface_support.capabilities.max_image_array_layers < options.desired_array_layer_count)
-        surface_support.capabilities.max_image_array_layers
+    const present_modes = try instance.getPhysicalDeviceSurfacePresentModesAllocKHR(physical_device, surface, allocator);
+    defer allocator.free(present_modes);
+
+    const min_image_count = selectMinImageCount(&capabilities, options.desired_min_image_count);
+    const format = pickSurfaceFormat(formats, options.desired_formats);
+    const present_mode = pickPresentMode(present_modes, options.desired_present_modes);
+    const extent = pickExtent(&capabilities, options.desired_extent);
+
+    const array_layer_count = if (capabilities.max_image_array_layers < options.desired_array_layer_count)
+        capabilities.max_image_array_layers
     else
         options.desired_array_layer_count;
 
     if (isSharedPresentMode(present_mode)) {
         // TODO: Shared present modes check
     } else {
-        const supported_flags = surface_support.capabilities.supported_usage_flags;
+        const supported_flags = capabilities.supported_usage_flags;
         if (options.image_usage_flags.intersect(supported_flags).toInt() == 0)
             return error.UsageFlagsNotSupported;
     }
@@ -146,18 +134,18 @@ pub fn create(
         .image_sharing_mode = if (same_index) .exclusive else .concurrent,
         .queue_family_index_count = if (same_index) 0 else @intCast(queue_family_indices.len),
         .p_queue_family_indices = if (same_index) null else @ptrCast(&queue_family_indices),
-        .pre_transform = if (options.pre_transform) |pre_transform| pre_transform else surface_support.capabilities.current_transform,
+        .pre_transform = if (options.pre_transform) |pre_transform| pre_transform else capabilities.current_transform,
         .composite_alpha = options.composite_alpha,
         .present_mode = present_mode,
         .clipped = options.clipped,
         .old_swapchain = if (options.old_swapchain) |old| old else .null_handle,
     };
 
-    const swapchain = try vkd().createSwapchainKHR(device, &swapchain_info, allocation_callbacks);
-    errdefer vkd().destroySwapchainKHR(device, swapchain, allocation_callbacks);
+    const swapchain = try device.createSwapchainKHR(&swapchain_info, allocation_callbacks);
+    errdefer device.destroySwapchainKHR(swapchain, allocation_callbacks);
 
     var image_count: u32 = undefined;
-    const result = try vkd().getSwapchainImagesKHR(device, swapchain, &image_count, null);
+    const result = try device.getSwapchainImagesKHR(swapchain, &image_count, null);
     if (result != .success) return error.GetSwapchainImageCountFailed;
 
     if (build_options.verbose) {
@@ -183,47 +171,48 @@ pub fn create(
     };
 }
 
-pub const GetImagesError = error{GetSwapchainImagesFailed} || DeviceWrapper.GetSwapchainImagesKHRError;
+pub const GetImagesError = error{GetSwapchainImagesFailed} || Device.GetSwapchainImagesKHRError;
 
 /// Returns an array of the swapchain's images.
 ///
 /// Buffer is used as the output.
 pub fn getImages(self: *const Swapchain, buffer: []vk.Image) GetImagesError!void {
     var image_count: u32 = 0;
-    var result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, null);
+    var result = try self.device.getSwapchainImagesKHR(self.handle, &image_count, null);
     if (result != .success) return error.GetSwapchainImagesFailed;
 
     std.debug.assert(image_count == buffer.len);
 
     while (true) {
-        result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, buffer.ptr);
+        result = try self.device.getSwapchainImagesKHR(self.handle, &image_count, buffer.ptr);
         if (result == .success) break;
     }
 }
 
-pub const GetImagesAllocError = error{ OutOfMemory, GetSwapchainImagesFailed } ||
-    DeviceWrapper.GetSwapchainImagesKHRError;
+pub const GetImagesAllocError = error{GetSwapchainImagesFailed} ||
+    Allocator.Error ||
+    Device.GetSwapchainImagesKHRError;
 
 /// Returns an array of the swapchain's images.
 ///
 /// Caller owns the memory.
 pub fn getImagesAlloc(self: *const Swapchain, allocator: std.mem.Allocator) GetImagesAllocError![]vk.Image {
     var image_count: u32 = 0;
-    var result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, null);
+    var result = try self.device.getSwapchainImagesKHR(self.handle, &image_count, null);
     if (result != .success) return error.GetSwapchainImagesFailed;
 
     const images = try allocator.alloc(vk.Image, image_count);
     errdefer allocator.free(images);
 
     while (true) {
-        result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, images.ptr);
+        result = try self.device.getSwapchainImagesKHR(self.handle, &image_count, images.ptr);
         if (result == .success) break;
     }
 
     return images;
 }
 
-pub const GetImageViewsError = DeviceWrapper.CreateImageViewError;
+pub const GetImageViewsError = Device.CreateImageViewError;
 
 /// Returns an array of image views to the images.
 ///
@@ -239,7 +228,7 @@ pub fn getImageViews(
     var initialized_count: u32 = 0;
     errdefer {
         for (0..initialized_count) |i| {
-            vkd().destroyImageView(self.device, buffer[i], allocation_callbacks);
+            self.device.destroyImageView(buffer[i], allocation_callbacks);
         }
     }
 
@@ -263,12 +252,12 @@ pub fn getImageViews(
             },
         };
 
-        buffer[i] = try vkd().createImageView(self.device, &image_view_info, allocation_callbacks);
+        buffer[i] = try self.device.createImageView(&image_view_info, allocation_callbacks);
         initialized_count += 1;
     }
 }
 
-pub const GetImageViewsErrorAlloc = error{OutOfMemory} || DeviceWrapper.CreateImageViewError;
+pub const GetImageViewsErrorAlloc = Allocator.Error || Device.CreateImageViewError;
 
 /// Returns an array of image views to the images.
 ///
@@ -279,15 +268,15 @@ pub fn getImageViewsAlloc(
     images: []const vk.Image,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) GetImageViewsErrorAlloc![]vk.ImageView {
-    var image_views = try std.ArrayList(vk.ImageView).initCapacity(allocator, images.len);
+    const image_views = try allocator.alloc(vk.ImageView, images.len);
     errdefer {
-        for (image_views.items) |view| {
-            vkd().destroyImageView(self.device, view, allocation_callbacks);
+        for (image_views) |view| {
+            self.device.destroyImageView(view, allocation_callbacks);
         }
-        image_views.deinit();
+        allocator.free(image_views);
     }
 
-    for (images) |image| {
+    for (images, 0..) |image, i| {
         const image_view_info = vk.ImageViewCreateInfo{
             .image = image,
             .view_type = .@"2d",
@@ -307,11 +296,10 @@ pub fn getImageViewsAlloc(
             },
         };
 
-        const view = try vkd().createImageView(self.device, &image_view_info, allocation_callbacks);
-        try image_views.append(view);
+        image_views[i] = try self.device.createImageView(&image_view_info, allocation_callbacks);
     }
 
-    return image_views.toOwnedSlice();
+    return image_views;
 }
 
 fn isSharedPresentMode(present_mode: vk.PresentModeKHR) bool {
@@ -384,45 +372,4 @@ fn selectMinImageCount(capabilities: *const vk.SurfaceCapabilitiesKHR, desired_m
         image_count = target_image_count;
 
     return image_count;
-}
-
-const SurfaceSupportDetails = struct {
-    capabilities: vk.SurfaceCapabilitiesKHR,
-    formats: SurfaceFormatsArray,
-    present_modes: PresentModesArray,
-};
-
-fn getSurfaceSupportDetails(
-    physical_device: vk.PhysicalDevice,
-    surface: vk.SurfaceKHR,
-) !SurfaceSupportDetails {
-    const capabilities = try vki().getPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface);
-
-    var format_count: u32 = 0;
-    var result = try vki().getPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, null);
-    if (result != .success) return error.GetPhysicalDeviceFormatsFailed;
-
-    var formats = try SurfaceFormatsArray.init(format_count);
-
-    while (true) {
-        result = try vki().getPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, &formats.buffer);
-        if (result == .success) break;
-    }
-
-    var present_mode_count: u32 = 0;
-    result = try vki().getPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, null);
-    if (result != .success) return error.GetPhysicalDevicePresentModesFailed;
-
-    var present_modes = try PresentModesArray.init(present_mode_count);
-
-    while (true) {
-        result = try vki().getPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, &present_modes.buffer);
-        if (result == .success) break;
-    }
-
-    return .{
-        .capabilities = capabilities,
-        .formats = formats,
-        .present_modes = present_modes,
-    };
 }

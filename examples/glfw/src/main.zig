@@ -68,12 +68,14 @@ pub fn main() !void {
     defer window.deinit(allocator);
 
     var ctx = try GraphicsContext.init(allocator, window);
-    defer ctx.deinit(allocator);
+    defer ctx.deinit();
 
     const device = ctx.device;
 
     var swapchain = try vkk.Swapchain.create(
-        device.handle,
+        allocator,
+        ctx.instance,
+        ctx.device,
         ctx.physical_device.handle,
         ctx.surface,
         .{
@@ -264,7 +266,9 @@ fn recreateSwapchain(
     try ctx.device.deviceWaitIdle();
 
     const swapchain = try vkk.Swapchain.create(
-        ctx.device.handle,
+        allocator,
+        ctx.instance,
+        ctx.device,
         ctx.physical_device.handle,
         old_swapchain.surface,
         .{
@@ -327,7 +331,7 @@ fn recordCommandBuffer(
 ) !void {
     const begin_info = vk.CommandBufferBeginInfo{};
     try ctx.device.beginCommandBuffer(command_buffer, &begin_info);
-    const cmd = CommandBuffer.init(command_buffer, ctx.vkd);
+    const cmd = CommandBuffer.init(command_buffer, ctx.device.wrapper);
 
     const clear_values = [_]vk.ClearValue{
         .{ .color = .{ .float_32 = .{ 0.1, 0.1, 0.1, 1 } } },
