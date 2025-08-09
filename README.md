@@ -15,38 +15,27 @@ This library helps with:
 
 ## Setting up
 
-Add [`vulkan-zig`](https://github.com/Snektron/vulkan-zig) as a dependency to your build.zig.zon:
-```
-zig fetch --save=vulkan_zig "https://github.com/Snektron/vulkan-zig/archive/<COMMIT_HASH>.tar.gz"
-```
-Use the same version as vk-kickstart for the commit hash. See [build.zig.zon](build.zig.zon)
-
-Then add vk-kickstart:
+Add vk-kickstart:
 ```
 zig fetch --save https://github.com/Mikastiv/vk-kickstart/archive/<COMMIT_HASH>.tar.gz
 ```
 
 Then update your build file with the following:
 ```zig
-// Provide the path to the Vulkan registry (requires version >= 1.3.277)
-const xml_path: []const u8 = b.pathFromRoot("vk.xml");
-
-// Add the vulkan-zig module
-const vkzig_dep = b.dependency("vulkan_zig", .{
-    .registry = xml_path,
-});
-exe.root_module.addImport("vulkan", vkzig_dep.module("vulkan-zig"));
-
-// Add vk-kickstart
-const kickstart_dep = b.dependency("vk_kickstart", .{
-    .registry = xml_path,
-    // Optional, default is false
+// Provide the Vulkan registry
+const registry = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
+const vk_kickstart = b.dependency("vk_kickstart", .{
+    .registry = registry,
+    // Enable validation layers and debug messenger
     .enable_validation = if (optimize == .Debug) true else false,
-    // Optional, default is false
+    // Verbose output
     .verbose = true,
 });
-exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
-```
+
+// Import vk-kickstart
+exe.root_module.addImport("vk-kickstart", vk_kickstart.module("vk-kickstart"));
+exe.root_module.addImport("vulkan", vk_kickstart.module("vulkan"));
+ ```
 
 You can then import `vk-kickstart` as a module and vulkan-zig
 ```zig

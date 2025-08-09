@@ -5,8 +5,6 @@ const Window = @import("Window.zig");
 const c = @import("c.zig");
 const GraphicsContext = @This();
 
-pub const InstanceDispatch = vk.InstanceWrapper;
-pub const DeviceDispatch = vk.DeviceWrapper;
 pub const Instance = vk.InstanceProxy;
 pub const Device = vk.DeviceProxy;
 pub const Queue = vk.QueueProxy;
