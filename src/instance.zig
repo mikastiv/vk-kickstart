@@ -26,11 +26,11 @@ pub const CreateOptions = struct {
     /// Application name.
     app_name: [*:0]const u8 = "",
     /// Application version.
-    app_version: u32 = 0,
+    app_version: vk.Version = vk.makeApiVersion(0, 0, 0, 0),
     /// Engine name.
     engine_name: [*:0]const u8 = "",
     /// Engine version.
-    engine_version: u32 = 0,
+    engine_version: vk.Version = vk.makeApiVersion(0, 0, 0, 0),
     /// Required Vulkan version (minimum 1.1).
     required_api_version: vk.Version = vk.API_VERSION_1_1,
     /// Array of required extensions to enable.
@@ -90,9 +90,9 @@ pub fn create(
 
     const app_info = vk.ApplicationInfo{
         .p_application_name = options.app_name,
-        .application_version = options.app_version,
+        .application_version = @bitCast(options.app_version),
         .p_engine_name = options.engine_name,
-        .engine_version = options.engine_version,
+        .engine_version = @bitCast(options.engine_version),
         .api_version = @bitCast(instance_version),
     };
 

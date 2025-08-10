@@ -19,11 +19,16 @@
             vulkan-headers
             vulkan-tools
             vulkan-validation-layers
+            vulkan-tools-lunarg
             libGL
             libGLU
             zls
             shaderc
           ];
+
+          LD_LIBRARY_PATH="${pkgs.vulkan-loader}/lib:${pkgs.vulkan-validation-layers}/lib";
+          VULKAN_SDK = "${pkgs.vulkan-headers}";
+          VK_LAYER_PATH = "${pkgs.vulkan-validation-layers}/share/vulkan/explicit_layer.d";
         };
       });
 }
