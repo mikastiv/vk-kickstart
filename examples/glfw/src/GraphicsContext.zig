@@ -88,9 +88,9 @@ pub fn init(allocator: std.mem.Allocator, window: *const Window) !GraphicsContex
 pub fn deinit(self: *GraphicsContext) void {
     self.device.destroyDevice(null);
     self.instance.destroySurfaceKHR(self.surface, null);
-    self.physical_device.deinit();
     vkk.instance.destroyDebugMessenger(self.instance, self.debug_messenger, null);
     self.instance.destroyInstance(null);
+    self.physical_device.deinit();
     self.allocator.destroy(self.instance.wrapper);
     self.allocator.destroy(self.device.wrapper);
 }
