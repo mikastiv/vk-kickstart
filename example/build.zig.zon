@@ -9,7 +9,7 @@
             .hash = "glfw-0.0.0-R5AeUm0HGgA_Rlrr9HR91ejkGd-K_JyCjkXz_U3b-jp9",
         },
         .vk_kickstart = .{
-            .path = "../../",
+            .path = "../",
         },
         .vulkan_headers = .{
             .url = "git+https://github.com/KhronosGroup/Vulkan-Headers#2e0a6e699e35c9609bde2ca4abb0d380c0378639",

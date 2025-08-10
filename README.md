@@ -43,11 +43,11 @@ const vkk = @import("vk-kickstart");
 const vk = @import("vulkan");
 ```
 
-See [build.zig](examples/glfw/build.zig) for an example
+See [build.zig](example/build.zig) for an example
 
 ## How to use
 
-For a code example, see [main.zig](examples/glfw/src/main.zig)
+For a code example, see [main.zig](example/src/main.zig)
 
 ### Instance creation
 
