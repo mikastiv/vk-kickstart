@@ -1,8 +1,7 @@
 const std = @import("std");
-const c = @import("c.zig");
+const zlfw = @import("zlfw");
 const vk = @import("vulkan");
 const vkk = @import("vk-kickstart");
-const Window = @import("Window.zig");
 const GraphicsContext = @import("GraphicsContext.zig");
 const Device = GraphicsContext.Device;
 const Queue = GraphicsContext.Queue;
@@ -22,26 +21,26 @@ const FrameSyncObjects = struct {
     in_flight_fence: vk.Fence,
 };
 
-fn errorCallback(error_code: i32, description: [*c]const u8) callconv(.C) void {
-    std.log.err("glfw: {}: {s}\n", .{ error_code, description });
-}
-
 const window_width = 800;
 const window_height = 600;
 
 pub fn main() !void {
-    _ = c.glfwSetErrorCallback(errorCallback);
-
-    if (c.glfwInit() == c.GLFW_FALSE) return error.GlfwInitFailed;
-    defer c.glfwTerminate();
+    try zlfw.init(.{});
+    defer zlfw.deinit();
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
     const allocator = gpa.allocator();
 
-    const window = try Window.init(allocator, window_width, window_height, "vk-kickstart");
-    defer window.deinit(allocator);
+    const window = try zlfw.Window.init(window_width, window_height, "vk-kickstart", null, null, .{
+        .resizable = true,
+        .focus_on_show = true,
+        .context = .{
+            .client = .none,
+        },
+    });
+    defer window.deinit();
 
     var ctx = try GraphicsContext.init(allocator, window);
     defer ctx.deinit();
@@ -109,8 +108,8 @@ pub fn main() !void {
 
     var current_frame: u32 = 0;
     var should_recreate_swapchain = false;
-    while (!window.shouldClose()) {
-        c.glfwPollEvents();
+    while (!window.shouldClose() and window.getKey(.escape) != .press) {
+        zlfw.pollEvents();
 
         if (should_recreate_swapchain) {
             swapchain = try recreateSwapchain(
@@ -124,12 +123,6 @@ pub fn main() !void {
                 &framebuffers,
             );
             should_recreate_swapchain = false;
-        }
-
-        if (window.framebuffer_resized) {
-            should_recreate_swapchain = true;
-            window.framebuffer_resized = false;
-            continue;
         }
 
         const result = try device.waitForFences(1, @ptrCast(&sync.in_flight_fences[current_frame]), vk.TRUE, std.math.maxInt(u64));
@@ -226,17 +219,17 @@ fn drawFrame(
 fn recreateSwapchain(
     allocator: std.mem.Allocator,
     ctx: *const GraphicsContext,
-    window: *Window,
+    window: zlfw.Window,
     old_swapchain: *vkk.Swapchain,
     images: *[]vk.Image,
     image_views: *[]vk.ImageView,
     render_pass: vk.RenderPass,
     framebuffers: *[]vk.Framebuffer,
 ) !vkk.Swapchain {
-    var extent = window.extent();
-    while (extent.width == 0 or extent.height == 0) {
-        extent = window.extent();
-        c.glfwWaitEvents();
+    var size = window.getSize();
+    while (size.width == 0 or size.height == 0) {
+        size = window.getSize();
+        zlfw.waitEvents();
     }
 
     try ctx.device.deviceWaitIdle();
@@ -250,7 +243,7 @@ fn recreateSwapchain(
         .{
             .graphics_queue_index = ctx.graphics_queue_index,
             .present_queue_index = ctx.present_queue_index,
-            .desired_extent = .{ .width = extent.width, .height = extent.height },
+            .desired_extent = .{ .width = size.width, .height = size.height },
             .old_swapchain = old_swapchain.handle,
         },
         null,

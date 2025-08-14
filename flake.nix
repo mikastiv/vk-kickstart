@@ -24,6 +24,7 @@
             libGLU
             zls
             shaderc
+            lldb
           ];
 
           LD_LIBRARY_PATH="${pkgs.vulkan-loader}/lib:${pkgs.vulkan-validation-layers}/lib";

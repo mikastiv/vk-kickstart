@@ -1,8 +1,7 @@
 const vk = @import("vulkan");
 const vkk = @import("vk-kickstart");
 const std = @import("std");
-const Window = @import("Window.zig");
-const c = @import("c.zig");
+const zlfw = @import("zlfw");
 const GraphicsContext = @This();
 
 pub const Instance = vk.InstanceProxy;
@@ -21,10 +20,12 @@ present_queue_index: u32,
 graphics_queue: Queue,
 present_queue: Queue,
 
-pub fn init(allocator: std.mem.Allocator, window: *const Window) !GraphicsContext {
+extern fn glfwGetInstanceProcAddress(instance: vk.Instance, procname: [*:0]const u8) vk.PfnVoidFunction;
+
+pub fn init(allocator: std.mem.Allocator, window: zlfw.Window) !GraphicsContext {
     const instance = try vkk.instance.create(
         allocator,
-        c.glfwGetInstanceProcAddress,
+        glfwGetInstanceProcAddress,
         .{ .required_api_version = vk.API_VERSION_1_3 },
         null,
     );
@@ -33,7 +34,7 @@ pub fn init(allocator: std.mem.Allocator, window: *const Window) !GraphicsContex
     const debug_messenger = try vkk.instance.createDebugMessenger(instance, .{}, null);
     errdefer vkk.instance.destroyDebugMessenger(instance, debug_messenger, null);
 
-    const surface = try window.createSurface(instance.handle);
+    const surface = try createSurface(instance, window);
     errdefer instance.destroySurfaceKHR(surface, null);
 
     const physical_device = try vkk.PhysicalDevice.select(allocator, instance, .{
@@ -93,4 +94,13 @@ pub fn deinit(self: *GraphicsContext) void {
     self.physical_device.deinit();
     self.allocator.destroy(self.instance.wrapper);
     self.allocator.destroy(self.device.wrapper);
+}
+
+fn createSurface(instance: Instance, window: zlfw.Window) !vk.SurfaceKHR {
+    var surface: vk.SurfaceKHR = .null_handle;
+    const instance_raw: usize = @intFromEnum(instance.handle);
+    const vk_result = zlfw.createWindowSurface(@ptrFromInt(instance_raw), @ptrCast(window.handle), null, @ptrCast(&surface));
+    const result: vk.Result = @enumFromInt(vk_result);
+    if (result != .success) return error.SurfaceCreationFailed;
+    return surface;
 }

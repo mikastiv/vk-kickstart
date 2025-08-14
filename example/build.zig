@@ -22,14 +22,15 @@ pub fn build(b: *std.Build) !void {
         .verbose = true,
     });
 
+    const zlfw = b.dependency("zlfw", .{
+        .target = target,
+        .optimize = optimize,
+        .vulkan = true,
+    });
+
     exe.root_module.addImport("vk-kickstart", vk_kickstart.module("vk-kickstart"));
     exe.root_module.addImport("vulkan", vk_kickstart.module("vulkan"));
-
-    const glfw = b.dependency("glfw", .{
-        .target = target,
-        .optimize = .ReleaseFast,
-    });
-    exe.linkLibrary(glfw.artifact("glfw"));
+    exe.root_module.addImport("zlfw", zlfw.module("zlfw"));
     exe.linkSystemLibrary("GL");
 
     addShader(b, exe, "shaders/shader.vert", "shader_vert");
