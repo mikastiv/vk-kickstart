@@ -8,30 +8,6 @@ const Device = GraphicsContext.Device;
 const Queue = GraphicsContext.Queue;
 const CommandBuffer = GraphicsContext.CommandBuffer;
 
-pub const vkk_options = struct {
-    // Constants below remove the need for an allocator. They all have default
-    // values but can be overriden if they are too big/small.
-
-    // Instance override
-    pub const instance_override = struct {
-        // pub const max_extensions = 64;
-        // pub const max_layers = 64;
-    };
-
-    // Physical device override
-    pub const physical_device_override = struct {
-        // pub const max_handles = 6;
-        // pub const max_enabled_extensions = 16;
-        // pub const max_available_extensions = 512;
-        // pub const max_queue_families = 16;
-    };
-
-    // Swapchain override
-    pub const swapchain_override = struct {
-        // pub const max_surface_formats = 32;
-    };
-};
-
 const max_frames_in_flight = 2;
 
 const SyncObjects = struct {
