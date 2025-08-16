@@ -84,8 +84,12 @@ pub fn create(
 ) CreateError!Instance {
     dispatch.base_wrapper = vk.BaseWrapper.load(loader);
 
-    const instance_version = try getAppropriateInstanceVersion(options.required_api_version);
-    if (@as(u32, @bitCast(instance_version)) < @as(u32, @bitCast(vk.API_VERSION_1_1)))
+    const instance_version_u32 = try dispatch.vkb().enumerateInstanceVersion();
+    const instance_version: vk.Version = @bitCast(instance_version_u32);
+
+    if (instance_version_u32 < @as(u32, @bitCast(options.required_api_version)))
+        return error.RequiredVersionNotAvailable;
+    if (instance_version_u32 < @as(u32, @bitCast(vk.API_VERSION_1_1)))
         return error.UnsupportedInstanceVersion;
 
     const app_info = vk.ApplicationInfo{
@@ -345,12 +349,4 @@ fn getRequiredLayers(
     }
 
     return required_layers.toOwnedSlice();
-}
-
-fn getAppropriateInstanceVersion(required_version: vk.Version) !vk.Version {
-    const instance_version = try dispatch.vkb().enumerateInstanceVersion();
-
-    if (instance_version < @as(u32, @bitCast(required_version)))
-        return error.RequiredVersionNotAvailable;
-    return @bitCast(instance_version);
 }

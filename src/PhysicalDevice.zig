@@ -20,6 +20,7 @@ features: vk.PhysicalDeviceFeatures,
 features_11: vk.PhysicalDeviceVulkan11Features,
 features_12: vk.PhysicalDeviceVulkan12Features,
 features_13: vk.PhysicalDeviceVulkan13Features,
+features_14: vk.PhysicalDeviceVulkan14Features,
 extensions: [][*:0]const u8,
 graphics_queue_index: u32,
 present_queue_index: u32,
@@ -61,6 +62,8 @@ pub const SelectOptions = struct {
     required_features_12: ?vk.PhysicalDeviceVulkan12Features = null,
     /// Required physical device feature version 1.3.
     required_features_13: ?vk.PhysicalDeviceVulkan13Features = null,
+    /// Required physical device feature version 1.4.
+    required_features_14: ?vk.PhysicalDeviceVulkan14Features = null,
     /// Array of required physical device extensions to enable.
     /// Note: VK_KHR_swapchain and VK_KHR_subset (if available) are automatically enabled.
     required_extensions: []const [*:0]const u8 = &.{},
@@ -70,6 +73,7 @@ const Error = error{
     Overflow,
     Features12UnsupportedByInstance,
     Features13UnsupportedByInstance,
+    Features14UnsupportedByInstance,
     EnumeratePhysicalDevicesFailed,
     EnumeratePhysicalDeviceExtensionsFailed,
     NoSuitableDeviceFound,
@@ -158,6 +162,10 @@ pub fn select(
                 log.debug(" available features (vulkan 1.3):", .{});
                 printAvailableFeatures(vk.PhysicalDeviceVulkan13Features, info.features_13);
             }
+            if (info.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_4))) {
+                log.debug(" available features (vulkan 1.4):", .{});
+                printAvailableFeatures(vk.PhysicalDeviceVulkan14Features, info.features_14);
+            }
         }
     }
 
@@ -190,6 +198,7 @@ pub fn select(
         .features_11 = options.required_features_11,
         .features_12 = if (options.required_features_12) |features| features else .{},
         .features_13 = if (options.required_features_13) |features| features else .{},
+        .features_14 = if (options.required_features_14) |features| features else .{},
         .properties = selected.properties,
         .memory_properties = selected.memory_properties,
         .extensions = try extensions.toOwnedSlice(),
@@ -234,6 +243,7 @@ const PhysicalDeviceInfo = struct {
     features_11: vk.PhysicalDeviceVulkan11Features,
     features_12: vk.PhysicalDeviceVulkan12Features,
     features_13: vk.PhysicalDeviceVulkan13Features,
+    features_14: vk.PhysicalDeviceVulkan14Features,
     properties: vk.PhysicalDeviceProperties,
     memory_properties: vk.PhysicalDeviceMemoryProperties,
     available_extensions: []vk.ExtensionProperties,
@@ -372,6 +382,7 @@ fn isDeviceSuitable(
     if (!supportsRequiredFeatures11(device.features_11, options.required_features_11)) return false;
     if (!supportsRequiredFeatures12(device.features_12, options.required_features_12)) return false;
     if (!supportsRequiredFeatures13(device.features_13, options.required_features_13)) return false;
+    if (!supportsRequiredFeatures14(device.features_14, options.required_features_14)) return false;
 
     for (options.required_extensions) |ext| {
         if (!isExtensionAvailable(device.available_extensions, ext)) {
@@ -397,6 +408,108 @@ fn isDeviceSuitable(
     }
 
     return true;
+}
+
+fn isCompatibleWithSurface(instance: Instance, handle: vk.PhysicalDevice, surface: vk.SurfaceKHR) !bool {
+    var format_count: u32 = 0;
+    var result = try instance.getPhysicalDeviceSurfaceFormatsKHR(handle, surface, &format_count, null);
+    if (result != .success) return false;
+
+    var present_mode_count: u32 = 0;
+    result = try instance.getPhysicalDeviceSurfacePresentModesKHR(handle, surface, &present_mode_count, null);
+    if (result != .success) return false;
+
+    return format_count > 0 and present_mode_count > 0;
+}
+
+fn isExtensionAvailable(
+    available_extensions: []const vk.ExtensionProperties,
+    extension: [*:0]const u8,
+) bool {
+    for (available_extensions) |ext| {
+        const n: [*:0]const u8 = @ptrCast(&ext.extension_name);
+        if (std.mem.orderZ(u8, n, extension) == .eq) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn getPhysicalDeviceInfo(
+    allocator: Allocator,
+    instance: Instance,
+    handle: vk.PhysicalDevice,
+    surface: vk.SurfaceKHR,
+    api_version: u32,
+) !PhysicalDeviceInfo {
+    const properties = instance.getPhysicalDeviceProperties(handle);
+    const memory_properties = instance.getPhysicalDeviceMemoryProperties(handle);
+
+    var features = vk.PhysicalDeviceFeatures2{ .features = .{} };
+    var features_11 = vk.PhysicalDeviceVulkan11Features{};
+    var features_12 = vk.PhysicalDeviceVulkan12Features{};
+    var features_13 = vk.PhysicalDeviceVulkan13Features{};
+    var features_14 = vk.PhysicalDeviceVulkan14Features{};
+
+    features.p_next = &features_11;
+    if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_2)))
+        features_11.p_next = &features_12;
+    if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3)))
+        features_12.p_next = &features_13;
+    if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_4)))
+        features_14.p_next = &features_14;
+
+    instance.getPhysicalDeviceFeatures2(handle, &features);
+
+    const available_extensions = try instance.enumerateDeviceExtensionPropertiesAlloc(handle, null, allocator);
+    errdefer allocator.free(available_extensions);
+    const queue_families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(handle, allocator);
+    errdefer allocator.free(queue_families);
+
+    const graphics_queue_index = getQueueStrict(queue_families, .{ .graphics_bit = true }, .{});
+    const dedicated_transfer = getQueueStrict(
+        queue_families,
+        .{ .transfer_bit = true },
+        .{ .graphics_bit = true, .compute_bit = true },
+    );
+    const dedicated_compute = getQueueStrict(
+        queue_families,
+        .{ .compute_bit = true },
+        .{ .graphics_bit = true, .transfer_bit = true },
+    );
+    const separate_transfer = getQueueNoGraphics(
+        queue_families,
+        .{ .transfer_bit = true },
+        .{ .compute_bit = true },
+    );
+    const separate_compute = getQueueNoGraphics(
+        queue_families,
+        .{ .compute_bit = true },
+        .{ .transfer_bit = true },
+    );
+    const present_queue_index = try getPresentQueue(instance, handle, queue_families, surface);
+
+    const portability_ext_available = isExtensionAvailable(available_extensions, vk.extensions.khr_portability_subset.name);
+
+    return .{
+        .handle = handle,
+        .features = features.features,
+        .features_11 = features_11,
+        .features_12 = features_12,
+        .features_13 = features_13,
+        .features_14 = features_14,
+        .properties = properties,
+        .memory_properties = memory_properties,
+        .available_extensions = available_extensions,
+        .queue_families = queue_families,
+        .graphics_queue_index = graphics_queue_index,
+        .present_queue_index = present_queue_index,
+        .dedicated_transfer_queue_index = dedicated_transfer,
+        .dedicated_compute_queue_index = dedicated_compute,
+        .separate_transfer_queue_index = separate_transfer,
+        .separate_compute_queue_index = separate_compute,
+        .portability_ext_available = portability_ext_available,
+    };
 }
 
 fn supportsRequiredFeatures(available: vk.PhysicalDeviceFeatures, required: vk.PhysicalDeviceFeatures) bool {
@@ -553,100 +666,30 @@ fn supportsRequiredFeatures13(available: vk.PhysicalDeviceVulkan13Features, requ
     return true;
 }
 
-fn isCompatibleWithSurface(instance: Instance, handle: vk.PhysicalDevice, surface: vk.SurfaceKHR) !bool {
-    var format_count: u32 = 0;
-    var result = try instance.getPhysicalDeviceSurfaceFormatsKHR(handle, surface, &format_count, null);
-    if (result != .success) return false;
+fn supportsRequiredFeatures14(available: vk.PhysicalDeviceVulkan14Features, required: ?vk.PhysicalDeviceVulkan14Features) bool {
+    if (required == null) return true;
 
-    var present_mode_count: u32 = 0;
-    result = try instance.getPhysicalDeviceSurfacePresentModesKHR(handle, surface, &present_mode_count, null);
-    if (result != .success) return false;
-
-    return format_count > 0 and present_mode_count > 0;
-}
-
-fn isExtensionAvailable(
-    available_extensions: []const vk.ExtensionProperties,
-    extension: [*:0]const u8,
-) bool {
-    for (available_extensions) |ext| {
-        const n: [*:0]const u8 = @ptrCast(&ext.extension_name);
-        if (std.mem.orderZ(u8, n, extension) == .eq) {
-            return true;
-        }
-    }
-    return false;
-}
-
-fn getPhysicalDeviceInfo(
-    allocator: Allocator,
-    instance: Instance,
-    handle: vk.PhysicalDevice,
-    surface: vk.SurfaceKHR,
-    api_version: u32,
-) !PhysicalDeviceInfo {
-    const properties = instance.getPhysicalDeviceProperties(handle);
-    const memory_properties = instance.getPhysicalDeviceMemoryProperties(handle);
-
-    var features = vk.PhysicalDeviceFeatures2{ .features = .{} };
-    var features_11 = vk.PhysicalDeviceVulkan11Features{};
-    var features_12 = vk.PhysicalDeviceVulkan12Features{};
-    var features_13 = vk.PhysicalDeviceVulkan13Features{};
-
-    features.p_next = &features_11;
-    if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_2)))
-        features_11.p_next = &features_12;
-    if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3)))
-        features_12.p_next = &features_13;
-
-    instance.getPhysicalDeviceFeatures2(handle, &features);
-
-    const available_extensions = try instance.enumerateDeviceExtensionPropertiesAlloc(handle, null, allocator);
-    errdefer allocator.free(available_extensions);
-    const queue_families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(handle, allocator);
-    errdefer allocator.free(queue_families);
-
-    const graphics_queue_index = getQueueStrict(queue_families, .{ .graphics_bit = true }, .{});
-    const dedicated_transfer = getQueueStrict(
-        queue_families,
-        .{ .transfer_bit = true },
-        .{ .graphics_bit = true, .compute_bit = true },
-    );
-    const dedicated_compute = getQueueStrict(
-        queue_families,
-        .{ .compute_bit = true },
-        .{ .graphics_bit = true, .transfer_bit = true },
-    );
-    const separate_transfer = getQueueNoGraphics(
-        queue_families,
-        .{ .transfer_bit = true },
-        .{ .compute_bit = true },
-    );
-    const separate_compute = getQueueNoGraphics(
-        queue_families,
-        .{ .compute_bit = true },
-        .{ .transfer_bit = true },
-    );
-    const present_queue_index = try getPresentQueue(instance, handle, queue_families, surface);
-
-    const portability_ext_available = isExtensionAvailable(available_extensions, vk.extensions.khr_portability_subset.name);
-
-    return .{
-        .handle = handle,
-        .features = features.features,
-        .features_11 = features_11,
-        .features_12 = features_12,
-        .features_13 = features_13,
-        .properties = properties,
-        .memory_properties = memory_properties,
-        .available_extensions = available_extensions,
-        .queue_families = queue_families,
-        .graphics_queue_index = graphics_queue_index,
-        .present_queue_index = present_queue_index,
-        .dedicated_transfer_queue_index = dedicated_transfer,
-        .dedicated_compute_queue_index = dedicated_compute,
-        .separate_transfer_queue_index = separate_transfer,
-        .separate_compute_queue_index = separate_compute,
-        .portability_ext_available = portability_ext_available,
-    };
+    const req = required.?;
+    if (req.global_priority_query == vk.TRUE and available.global_priority_query == vk.FALSE) return false;
+    if (req.shader_subgroup_rotate == vk.TRUE and available.shader_subgroup_rotate == vk.FALSE) return false;
+    if (req.shader_subgroup_rotate_clustered == vk.TRUE and available.shader_subgroup_rotate_clustered == vk.FALSE) return false;
+    if (req.shader_float_controls_2 == vk.TRUE and available.shader_float_controls_2 == vk.FALSE) return false;
+    if (req.shader_expect_assume == vk.TRUE and available.shader_expect_assume == vk.FALSE) return false;
+    if (req.rectangular_lines == vk.TRUE and available.rectangular_lines == vk.FALSE) return false;
+    if (req.bresenham_lines == vk.TRUE and available.bresenham_lines == vk.FALSE) return false;
+    if (req.smooth_lines == vk.TRUE and available.smooth_lines == vk.FALSE) return false;
+    if (req.stippled_rectangular_lines == vk.TRUE and available.stippled_rectangular_lines == vk.FALSE) return false;
+    if (req.stippled_bresenham_lines == vk.TRUE and available.stippled_bresenham_lines == vk.FALSE) return false;
+    if (req.stippled_smooth_lines == vk.TRUE and available.stippled_smooth_lines == vk.FALSE) return false;
+    if (req.vertex_attribute_instance_rate_divisor == vk.TRUE and available.vertex_attribute_instance_rate_divisor == vk.FALSE) return false;
+    if (req.vertex_attribute_instance_rate_zero_divisor == vk.TRUE and available.vertex_attribute_instance_rate_zero_divisor == vk.FALSE) return false;
+    if (req.index_type_uint_8 == vk.TRUE and available.index_type_uint_8 == vk.FALSE) return false;
+    if (req.dynamic_rendering_local_read == vk.TRUE and available.dynamic_rendering_local_read == vk.FALSE) return false;
+    if (req.maintenance_5 == vk.TRUE and available.maintenance_5 == vk.FALSE) return false;
+    if (req.maintenance_6 == vk.TRUE and available.maintenance_6 == vk.FALSE) return false;
+    if (req.pipeline_protected_access == vk.TRUE and available.pipeline_protected_access == vk.FALSE) return false;
+    if (req.pipeline_robustness == vk.TRUE and available.pipeline_robustness == vk.FALSE) return false;
+    if (req.host_image_copy == vk.TRUE and available.host_image_copy == vk.FALSE) return false;
+    if (req.push_descriptor == vk.TRUE and available.push_descriptor == vk.FALSE) return false;
+    return true;
 }
