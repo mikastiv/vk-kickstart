@@ -457,7 +457,7 @@ fn getPhysicalDeviceInfo(
     if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3)))
         features_12.p_next = &features_13;
     if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_4)))
-        features_14.p_next = &features_14;
+        features_13.p_next = &features_14;
 
     instance.getPhysicalDeviceFeatures2(handle, &features);
 
