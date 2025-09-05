@@ -35,6 +35,7 @@ pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContex
         },
         null,
     );
+    errdefer allocator.destroy(instance.wrapper);
     errdefer instance.destroyInstance(null);
 
     const debug_messenger = switch (is_debug) {
@@ -74,6 +75,7 @@ pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContex
     };
 
     const device = try vkk.device.create(allocator, instance, &physical_device, @ptrCast(&rt_features), null);
+    errdefer allocator.destroy(device.wrapper);
     errdefer device.destroyDevice(null);
 
     const graphics_queue_index = physical_device.graphics_queue_index;
