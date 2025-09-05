@@ -168,7 +168,7 @@ pub const CreateOptions = struct {
     /// Value indicating the alpha compositing mode to use when this surface is composited together with other surfaces on certain window systems
     composite_alpha: vk.CompositeAlphaFlagsKHR = .{ .opaque_bit_khr = true },
     /// Discard rendering operation that are not visible
-    clipped: vk.Bool32 = vk.TRUE,
+    clipped: vk.Bool32 = .true,
     /// Existing non-retired swapchain currently associated with surface
     old_swapchain: ?vk.SwapchainKHR = null,
     /// pNext chain
