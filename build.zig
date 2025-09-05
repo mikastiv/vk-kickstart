@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const maybe_registry = b.option(std.Build.LazyPath, "registry", "Path to the Vulkan registry");
-    if (maybe_registry == null) std.log.warn("no vk.xml path provided, pulling from https://github.com/KhronosGroup/Vulkan-Headers", .{});
+    if (maybe_registry == null) std.log.info("no vk.xml path provided, pulling from https://github.com/KhronosGroup/Vulkan-Headers", .{});
 
     const registry = maybe_registry orelse b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
     const vk_gen = b.dependency("vulkan", .{}).artifact("vulkan-zig-generator");
@@ -14,6 +14,8 @@ pub fn build(b: *std.Build) void {
 
     const vulkan = b.addModule("vulkan", .{
         .root_source_file = vk_gen_cmd.addOutputFileArg("vk.zig"),
+        .target = target,
+        .optimize = optimize,
     });
 
     const enable_validation = b.option(bool, "enable_validation", "Enable vulkan validation layers");

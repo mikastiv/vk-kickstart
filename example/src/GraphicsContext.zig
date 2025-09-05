@@ -1,7 +1,7 @@
 const vk = @import("vulkan");
 const vkk = @import("vk-kickstart");
 const std = @import("std");
-const zlfw = @import("zlfw");
+const c = @import("c.zig");
 const GraphicsContext = @This();
 
 pub const Instance = vk.InstanceProxy;
@@ -22,7 +22,7 @@ present_queue: Queue,
 
 extern fn glfwGetInstanceProcAddress(instance: vk.Instance, procname: [*:0]const u8) vk.PfnVoidFunction;
 
-pub fn init(allocator: std.mem.Allocator, window: zlfw.Window) !GraphicsContext {
+pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContext {
     const instance = try vkk.instance.create(
         allocator,
         glfwGetInstanceProcAddress,
@@ -34,7 +34,9 @@ pub fn init(allocator: std.mem.Allocator, window: zlfw.Window) !GraphicsContext 
     const debug_messenger = try vkk.instance.createDebugMessenger(instance, .{}, null);
     errdefer vkk.instance.destroyDebugMessenger(instance, debug_messenger, null);
 
-    const surface = try createSurface(instance, window);
+    var surface: vk.SurfaceKHR = .null_handle;
+    if (c.glfwCreateWindowSurface(instance.handle, window, null, &surface) != .success)
+        return error.SurfaceInitFailed;
     errdefer instance.destroySurfaceKHR(surface, null);
 
     const physical_device = try vkk.PhysicalDevice.select(allocator, instance, .{
@@ -48,10 +50,10 @@ pub fn init(allocator: std.mem.Allocator, window: zlfw.Window) !GraphicsContext 
             vk.extensions.ext_descriptor_indexing.name,
         },
         .required_features = .{
-            .sampler_anisotropy = vk.TRUE,
+            .sampler_anisotropy = .true,
         },
         .required_features_12 = .{
-            .descriptor_indexing = vk.TRUE,
+            .descriptor_indexing = .true,
         },
     });
     errdefer physical_device.deinit();
@@ -59,7 +61,7 @@ pub fn init(allocator: std.mem.Allocator, window: zlfw.Window) !GraphicsContext 
     std.log.info("selected {s}", .{physical_device.name()});
 
     var rt_features = vk.PhysicalDeviceRayTracingPipelineFeaturesKHR{
-        .ray_tracing_pipeline = vk.TRUE,
+        .ray_tracing_pipeline = .true,
     };
 
     const device = try vkk.device.create(allocator, instance, &physical_device, @ptrCast(&rt_features), null);
@@ -94,13 +96,4 @@ pub fn deinit(self: *GraphicsContext) void {
     self.physical_device.deinit();
     self.allocator.destroy(self.instance.wrapper);
     self.allocator.destroy(self.device.wrapper);
-}
-
-fn createSurface(instance: Instance, window: zlfw.Window) !vk.SurfaceKHR {
-    var surface: vk.SurfaceKHR = .null_handle;
-    const instance_raw: usize = @intFromEnum(instance.handle);
-    const vk_result = zlfw.createWindowSurface(@ptrFromInt(instance_raw), @ptrCast(window.handle), null, @ptrCast(&surface));
-    const result: vk.Result = @enumFromInt(vk_result);
-    if (result != .success) return error.SurfaceCreationFailed;
-    return surface;
 }

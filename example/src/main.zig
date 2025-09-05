@@ -1,11 +1,14 @@
 const std = @import("std");
-const zlfw = @import("zlfw");
+const builtin = @import("builtin");
 const vk = @import("vulkan");
 const vkk = @import("vk-kickstart");
+const c = @import("c.zig");
 const GraphicsContext = @import("GraphicsContext.zig");
 const Device = GraphicsContext.Device;
 const Queue = GraphicsContext.Queue;
 const CommandBuffer = GraphicsContext.CommandBuffer;
+
+const glfw_log = std.log.scoped(.glfw);
 
 const max_frames_in_flight = 2;
 
@@ -24,23 +27,39 @@ const FrameSyncObjects = struct {
 const window_width = 800;
 const window_height = 600;
 
+var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+
 pub fn main() !void {
-    try zlfw.init(.{});
-    defer zlfw.deinit();
+    _ = c.glfwSetErrorCallback(&glfwErrorCallback);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
+    if (c.glfwInit() != c.GLFW_TRUE) return error.GlfwInitFailed;
+    defer c.glfwTerminate();
 
-    const allocator = gpa.allocator();
+    if (c.glfwVulkanSupported() != c.GLFW_TRUE) {
+        glfw_log.err("Glfw could not find libvulkan", .{});
+        return error.GlfwNoVulkan;
+    }
 
-    const window = try zlfw.Window.init(window_width, window_height, "vk-kickstart", null, null, .{
-        .resizable = true,
-        .focus_on_show = true,
-        .context = .{
-            .client = .none,
-        },
-    });
-    defer window.deinit();
+    c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
+
+    const window = c.glfwCreateWindow(
+        window_width,
+        window_height,
+        "Tutorial",
+        null,
+        null,
+    ) orelse return error.GlfwWindowInitFailed;
+    defer c.glfwDestroyWindow(window);
+
+    _ = c.glfwSetKeyCallback(window, &glfwKeyCallback);
+
+    const allocator = switch (builtin.mode) {
+        .Debug => debug_allocator.allocator(),
+        else => std.heap.smp_allocator,
+    };
+    defer if (builtin.mode == .Debug) {
+        _ = debug_allocator.deinit();
+    };
 
     var ctx = try GraphicsContext.init(allocator, window);
     defer ctx.deinit();
@@ -108,8 +127,8 @@ pub fn main() !void {
 
     var current_frame: u32 = 0;
     var should_recreate_swapchain = false;
-    while (!window.shouldClose() and window.getKey(.escape) != .press) {
-        zlfw.pollEvents();
+    while (c.glfwWindowShouldClose(window) != c.GLFW_TRUE) {
+        c.glfwPollEvents();
 
         if (should_recreate_swapchain) {
             swapchain = try recreateSwapchain(
@@ -125,7 +144,7 @@ pub fn main() !void {
             should_recreate_swapchain = false;
         }
 
-        const result = try device.waitForFences(1, @ptrCast(&sync.in_flight_fences[current_frame]), vk.TRUE, std.math.maxInt(u64));
+        const result = try device.waitForFences(1, @ptrCast(&sync.in_flight_fences[current_frame]), .true, std.math.maxInt(u64));
         std.debug.assert(result == .success);
 
         const next_image_result = device.acquireNextImageKHR(
@@ -219,17 +238,19 @@ fn drawFrame(
 fn recreateSwapchain(
     allocator: std.mem.Allocator,
     ctx: *const GraphicsContext,
-    window: zlfw.Window,
+    window: *c.GLFWwindow,
     old_swapchain: *vkk.Swapchain,
     images: *[]vk.Image,
     image_views: *[]vk.ImageView,
     render_pass: vk.RenderPass,
     framebuffers: *[]vk.Framebuffer,
 ) !vkk.Swapchain {
-    var size = window.getSize();
-    while (size.width == 0 or size.height == 0) {
-        size = window.getSize();
-        zlfw.waitEvents();
+    var width: c_int = undefined;
+    var height: c_int = undefined;
+    c.glfwGetFramebufferSize(window, &width, &height);
+    while (width == 0 or height == 0) {
+        c.glfwGetFramebufferSize(window, &width, &height);
+        c.glfwWaitEvents();
     }
 
     try ctx.device.deviceWaitIdle();
@@ -243,7 +264,7 @@ fn recreateSwapchain(
         .{
             .graphics_queue_index = ctx.graphics_queue_index,
             .present_queue_index = ctx.present_queue_index,
-            .desired_extent = .{ .width = size.width, .height = size.height },
+            .desired_extent = .{ .width = @intCast(width), .height = @intCast(height) },
             .old_swapchain = old_swapchain.handle,
         },
         null,
@@ -404,17 +425,17 @@ fn createGraphicsPipeline(
 
     const input_assembly_info = vk.PipelineInputAssemblyStateCreateInfo{
         .topology = .triangle_list,
-        .primitive_restart_enable = vk.FALSE,
+        .primitive_restart_enable = .false,
     };
 
     const rasterizer_info = vk.PipelineRasterizationStateCreateInfo{
-        .depth_clamp_enable = vk.FALSE,
-        .rasterizer_discard_enable = vk.FALSE,
+        .depth_clamp_enable = .false,
+        .rasterizer_discard_enable = .false,
         .polygon_mode = .fill,
         .line_width = 1,
         .cull_mode = .{ .back_bit = true },
         .front_face = .clockwise,
-        .depth_bias_enable = vk.FALSE,
+        .depth_bias_enable = .false,
         .depth_bias_constant_factor = 0,
         .depth_bias_clamp = 0,
         .depth_bias_slope_factor = 0,
@@ -422,14 +443,14 @@ fn createGraphicsPipeline(
 
     const multisampling_info = vk.PipelineMultisampleStateCreateInfo{
         .rasterization_samples = .{ .@"1_bit" = true },
-        .sample_shading_enable = vk.FALSE,
+        .sample_shading_enable = .false,
         .min_sample_shading = 1,
-        .alpha_to_coverage_enable = vk.FALSE,
-        .alpha_to_one_enable = vk.FALSE,
+        .alpha_to_coverage_enable = .false,
+        .alpha_to_one_enable = .false,
     };
 
     const color_blend_attachments = [_]vk.PipelineColorBlendAttachmentState{.{
-        .blend_enable = vk.FALSE,
+        .blend_enable = .false,
         .src_color_blend_factor = .one,
         .dst_color_blend_factor = .zero,
         .color_blend_op = .add,
@@ -440,7 +461,7 @@ fn createGraphicsPipeline(
     }};
 
     const color_blend_info = vk.PipelineColorBlendStateCreateInfo{
-        .logic_op_enable = vk.FALSE,
+        .logic_op_enable = .false,
         .logic_op = .copy,
         .attachment_count = color_blend_attachments.len,
         .p_attachments = &color_blend_attachments,
@@ -536,7 +557,7 @@ fn createFramebuffers(
         for (framebuffers.items) |framebuffer| {
             device.destroyFramebuffer(framebuffer, null);
         }
-        framebuffers.deinit();
+        framebuffers.deinit(allocator);
     }
 
     for (0..image_count) |i| {
@@ -551,10 +572,10 @@ fn createFramebuffers(
         };
 
         const framebuffer = try device.createFramebuffer(&framebuffer_info, null);
-        try framebuffers.append(framebuffer);
+        try framebuffers.append(allocator, framebuffer);
     }
 
-    return framebuffers.toOwnedSlice();
+    return framebuffers.toOwnedSlice(allocator);
 }
 
 fn createRenderPass(device: Device, image_format: vk.Format) !vk.RenderPass {
@@ -600,4 +621,23 @@ fn createRenderPass(device: Device, image_format: vk.Format) !vk.RenderPass {
     };
 
     return device.createRenderPass(&renderpass_info, null);
+}
+
+fn glfwErrorCallback(
+    error_code: c_int,
+    description: [*c]const u8,
+) callconv(.c) void {
+    glfw_log.err("{d}: {s}\n", .{ error_code, description });
+}
+
+fn glfwKeyCallback(
+    window: ?*c.GLFWwindow,
+    key: c_int,
+    _: c_int,
+    action: c_int,
+    _: c_int,
+) callconv(.c) void {
+    if (key == c.GLFW_KEY_ESCAPE and action == c.GLFW_PRESS) {
+        c.glfwSetWindowShouldClose(window, c.GLFW_TRUE);
+    }
 }

@@ -4,34 +4,27 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const vk_kickstart = b.dependency("vk_kickstart", .{
+        .enable_validation = if (optimize == .Debug) true else false,
+        .verbose = true,
+    });
+
     const root_module = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
+        .imports = &.{
+            .{ .name = "vk-kickstart", .module = vk_kickstart.module("vk-kickstart") },
+            .{ .name = "vulkan", .module = vk_kickstart.module("vulkan") },
+        },
     });
 
     const exe = b.addExecutable(.{
         .name = "kickstart_glfw_example",
         .root_module = root_module,
     });
-
-    const registry = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
-    const vk_kickstart = b.dependency("vk_kickstart", .{
-        .registry = registry,
-        .enable_validation = if (optimize == .Debug) true else false,
-        .verbose = true,
-    });
-
-    const zlfw = b.dependency("zlfw", .{
-        .target = target,
-        .optimize = optimize,
-        .vulkan = true,
-    });
-
-    exe.root_module.addImport("vk-kickstart", vk_kickstart.module("vk-kickstart"));
-    exe.root_module.addImport("vulkan", vk_kickstart.module("vulkan"));
-    exe.root_module.addImport("zlfw", zlfw.module("zlfw"));
-    exe.linkSystemLibrary("GL");
+    exe.root_module.linkSystemLibrary("glfw", .{});
 
     addShader(b, exe, "shaders/shader.vert", "shader_vert");
     addShader(b, exe, "shaders/shader.frag", "shader_frag");

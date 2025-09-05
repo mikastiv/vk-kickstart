@@ -1,19 +1,11 @@
 .{
     .name = .kickstart_glfw_example,
     .version = "0.0.0",
-    .minimum_zig_version = "0.14.1",
+    .minimum_zig_version = "0.15.1",
     .fingerprint = 0x133522ddf1ea8fde,
     .dependencies = .{
         .vk_kickstart = .{
             .path = "../",
-        },
-        .vulkan_headers = .{
-            .url = "git+https://github.com/KhronosGroup/Vulkan-Headers#2e0a6e699e35c9609bde2ca4abb0d380c0378639",
-            .hash = "N-V-__8AACJA9gH2PXN1QZ9vF1oi8qUvJMRdX8ZZRTA5lova",
-        },
-        .zlfw = .{
-            .url = "git+https://github.com/Batres3/zlfw#8179800d04aa8e32cd8f276c824c181684043fb0",
-            .hash = "zlfw-0.0.1-xkyo0SlYAwDmH5XxOEIBqcrAPMYAGIlxCyS56kx0m5vh",
         },
     },
     .paths = .{

@@ -100,7 +100,7 @@ fn printEnabledFeatures(comptime T: type, features: T) void {
     const info = @typeInfo(T);
     if (info != .@"struct") @compileError("must be a struct");
     inline for (info.@"struct".fields) |field| {
-        if (field.type == vk.Bool32 and @field(features, field.name) != 0) {
+        if (field.type == vk.Bool32 and @field(features, field.name) == .true) {
             log.debug(" - {s}", .{field.name});
         }
     }
@@ -122,7 +122,7 @@ fn createQueueInfos(
         try unique_queue_families.put(idx, {});
     }
 
-    var queue_create_infos = std.ArrayList(vk.DeviceQueueCreateInfo).init(allocator);
+    var queue_create_infos: std.ArrayList(vk.DeviceQueueCreateInfo) = .empty;
 
     const queue_priorities = [_]f32{1};
 
@@ -133,8 +133,8 @@ fn createQueueInfos(
             .queue_count = @intCast(queue_priorities.len),
             .p_queue_priorities = &queue_priorities,
         };
-        try queue_create_infos.append(queue_create_info);
+        try queue_create_infos.append(allocator, queue_create_info);
     }
 
-    return try queue_create_infos.toOwnedSlice();
+    return try queue_create_infos.toOwnedSlice(allocator);
 }

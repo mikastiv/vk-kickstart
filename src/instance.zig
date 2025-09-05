@@ -97,7 +97,7 @@ pub fn create(
         .application_version = @bitCast(options.app_version),
         .p_engine_name = options.engine_name,
         .engine_version = @bitCast(options.engine_version),
-        .api_version = @bitCast(instance_version),
+        .api_version = @bitCast(options.required_api_version),
     };
 
     const available_extensions = try dispatch.vkb().enumerateInstanceExtensionPropertiesAlloc(null, allocator);
@@ -228,7 +228,7 @@ fn defaultDebugMessageCallback(
             vk_log.debug(format, .{data.p_message});
         }
     }
-    return vk.FALSE;
+    return .false;
 }
 
 fn isExtensionAvailable(
@@ -245,12 +245,13 @@ fn isExtensionAvailable(
 }
 
 fn addExtension(
+    allocator: Allocator,
     available_extensions: []const vk.ExtensionProperties,
     new_extension: [*:0]const u8,
     buffer: *std.ArrayList([*:0]const u8),
 ) !bool {
     if (isExtensionAvailable(available_extensions, new_extension)) {
-        try buffer.append(new_extension);
+        try buffer.append(allocator, new_extension);
         return true;
     }
     return false;
@@ -261,15 +262,15 @@ fn getRequiredExtensions(
     config_extensions: []const [*:0]const u8,
     available_extensions: []const vk.ExtensionProperties,
 ) ![][*:0]const u8 {
-    var required_extensions: std.ArrayList([*:0]const u8) = .init(allocator);
+    var required_extensions: std.ArrayList([*:0]const u8) = .empty;
 
     for (config_extensions) |ext| {
-        if (!try addExtension(available_extensions, ext, &required_extensions)) {
+        if (!try addExtension(allocator, available_extensions, ext, &required_extensions)) {
             return error.RequestedExtensionNotAvailable;
         }
     }
 
-    if (!try addExtension(available_extensions, vk.extensions.khr_surface.name, &required_extensions)) {
+    if (!try addExtension(allocator, available_extensions, vk.extensions.khr_surface.name, &required_extensions)) {
         return error.SurfaceExtensionNotAvailable;
     }
 
@@ -286,20 +287,20 @@ fn getRequiredExtensions(
 
     var added_one = false;
     for (windowing_extensions) |ext| {
-        added_one = try addExtension(available_extensions, ext, &required_extensions) or added_one;
+        added_one = try addExtension(allocator, available_extensions, ext, &required_extensions) or added_one;
     }
 
     if (!added_one) return error.WindowingExtensionNotAvailable;
 
     if (build_options.enable_validation) {
-        if (!try addExtension(available_extensions, vk.extensions.ext_debug_utils.name, &required_extensions)) {
+        if (!try addExtension(allocator, available_extensions, vk.extensions.ext_debug_utils.name, &required_extensions)) {
             return error.DebugMessengerExtensionNotAvailable;
         }
     }
 
-    _ = addExtension(available_extensions, vk.extensions.khr_portability_enumeration.name, &required_extensions) catch {};
+    _ = addExtension(allocator, available_extensions, vk.extensions.khr_portability_enumeration.name, &required_extensions) catch {};
 
-    return required_extensions.toOwnedSlice();
+    return required_extensions.toOwnedSlice(allocator);
 }
 
 fn isLayerAvailable(
@@ -316,12 +317,13 @@ fn isLayerAvailable(
 }
 
 fn addLayer(
+    allocator: Allocator,
     available_layers: []const vk.LayerProperties,
     new_layer: [*:0]const u8,
     buffer: *std.ArrayList([*:0]const u8),
 ) !bool {
     if (isLayerAvailable(available_layers, new_layer)) {
-        try buffer.append(new_layer);
+        try buffer.append(allocator, new_layer);
         return true;
     }
     return false;
@@ -332,21 +334,21 @@ fn getRequiredLayers(
     config_layers: []const [*:0]const u8,
     available_layers: []const vk.LayerProperties,
 ) ![][*:0]const u8 {
-    var required_layers: std.ArrayList([*:0]const u8) = .init(allocator);
+    var required_layers: std.ArrayList([*:0]const u8) = .empty;
 
     for (config_layers) |layer| {
-        if (!try addLayer(available_layers, layer, &required_layers)) {
+        if (!try addLayer(allocator, available_layers, layer, &required_layers)) {
             return error.RequestedLayerNotAvailable;
         }
     }
 
     if (build_options.enable_validation) {
         for (validation_layers) |layer| {
-            if (!try addLayer(available_layers, layer, &required_layers)) {
+            if (!try addLayer(allocator, available_layers, layer, &required_layers)) {
                 return error.ValidationLayersNotAvailable;
             }
         }
     }
 
-    return required_layers.toOwnedSlice();
+    return required_layers.toOwnedSlice(allocator);
 }

@@ -99,17 +99,17 @@ pub fn select(
     defer allocator.free(physical_device_handles);
 
     const instance_version = try dispatch.vkb().enumerateInstanceVersion();
-    var physical_device_infos = std.ArrayList(PhysicalDeviceInfo).init(allocator);
+    var physical_device_infos: std.ArrayList(PhysicalDeviceInfo) = .empty;
     defer {
         for (physical_device_infos.items) |*info| {
             info.deinit(allocator);
         }
-        physical_device_infos.deinit();
+        physical_device_infos.deinit(allocator);
     }
 
     for (physical_device_handles) |handle| {
         const physical_device_info = try getPhysicalDeviceInfo(allocator, instance, handle, options.surface, instance_version);
-        try physical_device_infos.append(physical_device_info);
+        try physical_device_infos.append(allocator, physical_device_info);
     }
 
     for (physical_device_infos.items) |*info| {
@@ -132,7 +132,7 @@ pub fn select(
             log.debug(" api version: {d}.{d}.{d}", .{ device_version.major, device_version.minor, device_version.patch });
             log.debug(" device type: {s}", .{@tagName(info.properties.device_type)});
             const local_memory_size = getLocalMemorySize(&info.memory_properties);
-            log.debug(" local memory size: {:.2}", .{std.fmt.fmtIntSizeBin(local_memory_size)});
+            log.debug(" local memory size: {Bi:.2}", .{local_memory_size});
 
             log.debug(" queue family count: {d}", .{info.queue_families.len});
             log.debug(" graphics queue family: {s}", .{if (info.graphics_queue_index != null) "yes" else "no"});
@@ -174,17 +174,17 @@ pub fn select(
     const selected = &physical_device_infos.items[0];
     if (!selected.suitable) return error.NoSuitableDeviceFound;
 
-    var extensions = std.ArrayList([*:0]const u8).init(allocator);
+    var extensions: std.ArrayList([*:0]const u8) = .empty;
 
     for (options.required_extensions) |ext| {
-        try extensions.append(ext);
+        try extensions.append(allocator, ext);
     }
 
     if (selected.portability_ext_available) {
-        try extensions.append(vk.extensions.khr_portability_subset.name);
+        try extensions.append(allocator, vk.extensions.khr_portability_subset.name);
     }
 
-    try extensions.append(vk.extensions.khr_swapchain.name);
+    try extensions.append(allocator, vk.extensions.khr_swapchain.name);
 
     if (build_options.verbose) {
         const device_name: [*:0]const u8 = @ptrCast(&selected.properties.device_name);
@@ -201,7 +201,7 @@ pub fn select(
         .features_14 = if (options.required_features_14) |features| features else .{},
         .properties = selected.properties,
         .memory_properties = selected.memory_properties,
-        .extensions = try extensions.toOwnedSlice(),
+        .extensions = try extensions.toOwnedSlice(allocator),
         .graphics_queue_index = selected.graphics_queue_index.?,
         .present_queue_index = selected.present_queue_index.?,
         .transfer_queue_index = switch (options.transfer_queue) {
@@ -232,7 +232,7 @@ fn printAvailableFeatures(comptime T: type, features: T) void {
     if (info != .@"struct") @compileError("must be a struct");
     inline for (info.@"struct".fields) |field| {
         if (field.type == vk.Bool32) {
-            log.debug(" - {s}: {s}", .{ field.name, if (@field(features, field.name) != vk.FALSE) "yes" else "no" });
+            log.debug(" - {s}: {s}", .{ field.name, if (@field(features, field.name) != .false) "yes" else "no" });
         }
     }
 }
@@ -274,7 +274,7 @@ fn getPresentQueue(
 
         const idx: u32 = @intCast(i);
 
-        if (try instance.getPhysicalDeviceSurfaceSupportKHR(handle, idx, surface) == vk.TRUE) {
+        if (try instance.getPhysicalDeviceSurfaceSupportKHR(handle, idx, surface) == .true) {
             return idx;
         }
     }
@@ -513,78 +513,78 @@ fn getPhysicalDeviceInfo(
 }
 
 fn supportsRequiredFeatures(available: vk.PhysicalDeviceFeatures, required: vk.PhysicalDeviceFeatures) bool {
-    if (required.alpha_to_one == vk.TRUE and available.alpha_to_one == vk.FALSE) return false;
-    if (required.depth_bias_clamp == vk.TRUE and available.depth_bias_clamp == vk.FALSE) return false;
-    if (required.depth_bounds == vk.TRUE and available.depth_bounds == vk.FALSE) return false;
-    if (required.depth_clamp == vk.TRUE and available.depth_clamp == vk.FALSE) return false;
-    if (required.draw_indirect_first_instance == vk.TRUE and available.draw_indirect_first_instance == vk.FALSE) return false;
-    if (required.dual_src_blend == vk.TRUE and available.dual_src_blend == vk.FALSE) return false;
-    if (required.fill_mode_non_solid == vk.TRUE and available.fill_mode_non_solid == vk.FALSE) return false;
-    if (required.fragment_stores_and_atomics == vk.TRUE and available.fragment_stores_and_atomics == vk.FALSE) return false;
-    if (required.full_draw_index_uint_32 == vk.TRUE and available.full_draw_index_uint_32 == vk.FALSE) return false;
-    if (required.geometry_shader == vk.TRUE and available.geometry_shader == vk.FALSE) return false;
-    if (required.image_cube_array == vk.TRUE and available.image_cube_array == vk.FALSE) return false;
-    if (required.independent_blend == vk.TRUE and available.independent_blend == vk.FALSE) return false;
-    if (required.inherited_queries == vk.TRUE and available.inherited_queries == vk.FALSE) return false;
-    if (required.large_points == vk.TRUE and available.large_points == vk.FALSE) return false;
-    if (required.logic_op == vk.TRUE and available.logic_op == vk.FALSE) return false;
-    if (required.multi_draw_indirect == vk.TRUE and available.multi_draw_indirect == vk.FALSE) return false;
-    if (required.multi_viewport == vk.TRUE and available.multi_viewport == vk.FALSE) return false;
-    if (required.occlusion_query_precise == vk.TRUE and available.occlusion_query_precise == vk.FALSE) return false;
-    if (required.pipeline_statistics_query == vk.TRUE and available.pipeline_statistics_query == vk.FALSE) return false;
-    if (required.robust_buffer_access == vk.TRUE and available.robust_buffer_access == vk.FALSE) return false;
-    if (required.sample_rate_shading == vk.TRUE and available.sample_rate_shading == vk.FALSE) return false;
-    if (required.sampler_anisotropy == vk.TRUE and available.sampler_anisotropy == vk.FALSE) return false;
-    if (required.shader_clip_distance == vk.TRUE and available.shader_clip_distance == vk.FALSE) return false;
-    if (required.shader_cull_distance == vk.TRUE and available.shader_cull_distance == vk.FALSE) return false;
-    if (required.shader_float_64 == vk.TRUE and available.shader_float_64 == vk.FALSE) return false;
-    if (required.shader_image_gather_extended == vk.TRUE and available.shader_image_gather_extended == vk.FALSE) return false;
-    if (required.shader_int_16 == vk.TRUE and available.shader_int_16 == vk.FALSE) return false;
-    if (required.shader_int_64 == vk.TRUE and available.shader_int_64 == vk.FALSE) return false;
-    if (required.shader_resource_min_lod == vk.TRUE and available.shader_resource_min_lod == vk.FALSE) return false;
-    if (required.shader_resource_residency == vk.TRUE and available.shader_resource_residency == vk.FALSE) return false;
-    if (required.shader_tessellation_and_geometry_point_size == vk.TRUE and available.shader_tessellation_and_geometry_point_size == vk.FALSE) return false;
-    if (required.shader_sampled_image_array_dynamic_indexing == vk.TRUE and available.shader_sampled_image_array_dynamic_indexing == vk.FALSE) return false;
-    if (required.shader_storage_buffer_array_dynamic_indexing == vk.TRUE and available.shader_storage_buffer_array_dynamic_indexing == vk.FALSE) return false;
-    if (required.shader_storage_image_array_dynamic_indexing == vk.TRUE and available.shader_storage_image_array_dynamic_indexing == vk.FALSE) return false;
-    if (required.shader_storage_image_extended_formats == vk.TRUE and available.shader_storage_image_extended_formats == vk.FALSE) return false;
-    if (required.shader_storage_image_multisample == vk.TRUE and available.shader_storage_image_multisample == vk.FALSE) return false;
-    if (required.shader_storage_image_read_without_format == vk.TRUE and available.shader_storage_image_read_without_format == vk.FALSE) return false;
-    if (required.shader_storage_image_write_without_format == vk.TRUE and available.shader_storage_image_write_without_format == vk.FALSE) return false;
-    if (required.shader_uniform_buffer_array_dynamic_indexing == vk.TRUE and available.shader_uniform_buffer_array_dynamic_indexing == vk.FALSE) return false;
-    if (required.sparse_binding == vk.TRUE and available.sparse_binding == vk.FALSE) return false;
-    if (required.sparse_residency_2_samples == vk.TRUE and available.sparse_residency_2_samples == vk.FALSE) return false;
-    if (required.sparse_residency_4_samples == vk.TRUE and available.sparse_residency_4_samples == vk.FALSE) return false;
-    if (required.sparse_residency_8_samples == vk.TRUE and available.sparse_residency_8_samples == vk.FALSE) return false;
-    if (required.sparse_residency_16_samples == vk.TRUE and available.sparse_residency_16_samples == vk.FALSE) return false;
-    if (required.sparse_residency_aliased == vk.TRUE and available.sparse_residency_aliased == vk.FALSE) return false;
-    if (required.sparse_residency_buffer == vk.TRUE and available.sparse_residency_buffer == vk.FALSE) return false;
-    if (required.sparse_residency_image_2d == vk.TRUE and available.sparse_residency_image_2d == vk.FALSE) return false;
-    if (required.sparse_residency_image_3d == vk.TRUE and available.sparse_residency_image_3d == vk.FALSE) return false;
-    if (required.tessellation_shader == vk.TRUE and available.tessellation_shader == vk.FALSE) return false;
-    if (required.texture_compression_astc_ldr == vk.TRUE and available.texture_compression_astc_ldr == vk.FALSE) return false;
-    if (required.texture_compression_bc == vk.TRUE and available.texture_compression_bc == vk.FALSE) return false;
-    if (required.texture_compression_etc2 == vk.TRUE and available.texture_compression_etc2 == vk.FALSE) return false;
-    if (required.variable_multisample_rate == vk.TRUE and available.variable_multisample_rate == vk.FALSE) return false;
-    if (required.vertex_pipeline_stores_and_atomics == vk.TRUE and available.vertex_pipeline_stores_and_atomics == vk.FALSE) return false;
-    if (required.wide_lines == vk.TRUE and available.wide_lines == vk.FALSE) return false;
+    if (required.alpha_to_one == .true and available.alpha_to_one == .false) return false;
+    if (required.depth_bias_clamp == .true and available.depth_bias_clamp == .false) return false;
+    if (required.depth_bounds == .true and available.depth_bounds == .false) return false;
+    if (required.depth_clamp == .true and available.depth_clamp == .false) return false;
+    if (required.draw_indirect_first_instance == .true and available.draw_indirect_first_instance == .false) return false;
+    if (required.dual_src_blend == .true and available.dual_src_blend == .false) return false;
+    if (required.fill_mode_non_solid == .true and available.fill_mode_non_solid == .false) return false;
+    if (required.fragment_stores_and_atomics == .true and available.fragment_stores_and_atomics == .false) return false;
+    if (required.full_draw_index_uint_32 == .true and available.full_draw_index_uint_32 == .false) return false;
+    if (required.geometry_shader == .true and available.geometry_shader == .false) return false;
+    if (required.image_cube_array == .true and available.image_cube_array == .false) return false;
+    if (required.independent_blend == .true and available.independent_blend == .false) return false;
+    if (required.inherited_queries == .true and available.inherited_queries == .false) return false;
+    if (required.large_points == .true and available.large_points == .false) return false;
+    if (required.logic_op == .true and available.logic_op == .false) return false;
+    if (required.multi_draw_indirect == .true and available.multi_draw_indirect == .false) return false;
+    if (required.multi_viewport == .true and available.multi_viewport == .false) return false;
+    if (required.occlusion_query_precise == .true and available.occlusion_query_precise == .false) return false;
+    if (required.pipeline_statistics_query == .true and available.pipeline_statistics_query == .false) return false;
+    if (required.robust_buffer_access == .true and available.robust_buffer_access == .false) return false;
+    if (required.sample_rate_shading == .true and available.sample_rate_shading == .false) return false;
+    if (required.sampler_anisotropy == .true and available.sampler_anisotropy == .false) return false;
+    if (required.shader_clip_distance == .true and available.shader_clip_distance == .false) return false;
+    if (required.shader_cull_distance == .true and available.shader_cull_distance == .false) return false;
+    if (required.shader_float_64 == .true and available.shader_float_64 == .false) return false;
+    if (required.shader_image_gather_extended == .true and available.shader_image_gather_extended == .false) return false;
+    if (required.shader_int_16 == .true and available.shader_int_16 == .false) return false;
+    if (required.shader_int_64 == .true and available.shader_int_64 == .false) return false;
+    if (required.shader_resource_min_lod == .true and available.shader_resource_min_lod == .false) return false;
+    if (required.shader_resource_residency == .true and available.shader_resource_residency == .false) return false;
+    if (required.shader_tessellation_and_geometry_point_size == .true and available.shader_tessellation_and_geometry_point_size == .false) return false;
+    if (required.shader_sampled_image_array_dynamic_indexing == .true and available.shader_sampled_image_array_dynamic_indexing == .false) return false;
+    if (required.shader_storage_buffer_array_dynamic_indexing == .true and available.shader_storage_buffer_array_dynamic_indexing == .false) return false;
+    if (required.shader_storage_image_array_dynamic_indexing == .true and available.shader_storage_image_array_dynamic_indexing == .false) return false;
+    if (required.shader_storage_image_extended_formats == .true and available.shader_storage_image_extended_formats == .false) return false;
+    if (required.shader_storage_image_multisample == .true and available.shader_storage_image_multisample == .false) return false;
+    if (required.shader_storage_image_read_without_format == .true and available.shader_storage_image_read_without_format == .false) return false;
+    if (required.shader_storage_image_write_without_format == .true and available.shader_storage_image_write_without_format == .false) return false;
+    if (required.shader_uniform_buffer_array_dynamic_indexing == .true and available.shader_uniform_buffer_array_dynamic_indexing == .false) return false;
+    if (required.sparse_binding == .true and available.sparse_binding == .false) return false;
+    if (required.sparse_residency_2_samples == .true and available.sparse_residency_2_samples == .false) return false;
+    if (required.sparse_residency_4_samples == .true and available.sparse_residency_4_samples == .false) return false;
+    if (required.sparse_residency_8_samples == .true and available.sparse_residency_8_samples == .false) return false;
+    if (required.sparse_residency_16_samples == .true and available.sparse_residency_16_samples == .false) return false;
+    if (required.sparse_residency_aliased == .true and available.sparse_residency_aliased == .false) return false;
+    if (required.sparse_residency_buffer == .true and available.sparse_residency_buffer == .false) return false;
+    if (required.sparse_residency_image_2d == .true and available.sparse_residency_image_2d == .false) return false;
+    if (required.sparse_residency_image_3d == .true and available.sparse_residency_image_3d == .false) return false;
+    if (required.tessellation_shader == .true and available.tessellation_shader == .false) return false;
+    if (required.texture_compression_astc_ldr == .true and available.texture_compression_astc_ldr == .false) return false;
+    if (required.texture_compression_bc == .true and available.texture_compression_bc == .false) return false;
+    if (required.texture_compression_etc2 == .true and available.texture_compression_etc2 == .false) return false;
+    if (required.variable_multisample_rate == .true and available.variable_multisample_rate == .false) return false;
+    if (required.vertex_pipeline_stores_and_atomics == .true and available.vertex_pipeline_stores_and_atomics == .false) return false;
+    if (required.wide_lines == .true and available.wide_lines == .false) return false;
 
     return true;
 }
 
 fn supportsRequiredFeatures11(available: vk.PhysicalDeviceVulkan11Features, required: vk.PhysicalDeviceVulkan11Features) bool {
-    if (required.storage_buffer_16_bit_access == vk.TRUE and available.storage_buffer_16_bit_access == vk.FALSE) return false;
-    if (required.uniform_and_storage_buffer_16_bit_access == vk.TRUE and available.uniform_and_storage_buffer_16_bit_access == vk.FALSE) return false;
-    if (required.storage_push_constant_16 == vk.TRUE and available.storage_push_constant_16 == vk.FALSE) return false;
-    if (required.storage_input_output_16 == vk.TRUE and available.storage_input_output_16 == vk.FALSE) return false;
-    if (required.multiview == vk.TRUE and available.multiview == vk.FALSE) return false;
-    if (required.multiview_geometry_shader == vk.TRUE and available.multiview_geometry_shader == vk.FALSE) return false;
-    if (required.multiview_tessellation_shader == vk.TRUE and available.multiview_tessellation_shader == vk.FALSE) return false;
-    if (required.variable_pointers_storage_buffer == vk.TRUE and available.variable_pointers_storage_buffer == vk.FALSE) return false;
-    if (required.variable_pointers == vk.TRUE and available.variable_pointers == vk.FALSE) return false;
-    if (required.protected_memory == vk.TRUE and available.protected_memory == vk.FALSE) return false;
-    if (required.sampler_ycbcr_conversion == vk.TRUE and available.sampler_ycbcr_conversion == vk.FALSE) return false;
-    if (required.shader_draw_parameters == vk.TRUE and available.shader_draw_parameters == vk.FALSE) return false;
+    if (required.storage_buffer_16_bit_access == .true and available.storage_buffer_16_bit_access == .false) return false;
+    if (required.uniform_and_storage_buffer_16_bit_access == .true and available.uniform_and_storage_buffer_16_bit_access == .false) return false;
+    if (required.storage_push_constant_16 == .true and available.storage_push_constant_16 == .false) return false;
+    if (required.storage_input_output_16 == .true and available.storage_input_output_16 == .false) return false;
+    if (required.multiview == .true and available.multiview == .false) return false;
+    if (required.multiview_geometry_shader == .true and available.multiview_geometry_shader == .false) return false;
+    if (required.multiview_tessellation_shader == .true and available.multiview_tessellation_shader == .false) return false;
+    if (required.variable_pointers_storage_buffer == .true and available.variable_pointers_storage_buffer == .false) return false;
+    if (required.variable_pointers == .true and available.variable_pointers == .false) return false;
+    if (required.protected_memory == .true and available.protected_memory == .false) return false;
+    if (required.sampler_ycbcr_conversion == .true and available.sampler_ycbcr_conversion == .false) return false;
+    if (required.shader_draw_parameters == .true and available.shader_draw_parameters == .false) return false;
 
     return true;
 }
@@ -593,53 +593,53 @@ fn supportsRequiredFeatures12(available: vk.PhysicalDeviceVulkan12Features, requ
     if (required == null) return true;
 
     const req = required.?;
-    if (req.sampler_mirror_clamp_to_edge == vk.TRUE and available.sampler_mirror_clamp_to_edge == vk.FALSE) return false;
-    if (req.draw_indirect_count == vk.TRUE and available.draw_indirect_count == vk.FALSE) return false;
-    if (req.storage_buffer_8_bit_access == vk.TRUE and available.storage_buffer_8_bit_access == vk.FALSE) return false;
-    if (req.uniform_and_storage_buffer_8_bit_access == vk.TRUE and available.uniform_and_storage_buffer_8_bit_access == vk.FALSE) return false;
-    if (req.storage_push_constant_8 == vk.TRUE and available.storage_push_constant_8 == vk.FALSE) return false;
-    if (req.shader_buffer_int_64_atomics == vk.TRUE and available.shader_buffer_int_64_atomics == vk.FALSE) return false;
-    if (req.shader_shared_int_64_atomics == vk.TRUE and available.shader_shared_int_64_atomics == vk.FALSE) return false;
-    if (req.shader_float_16 == vk.TRUE and available.shader_float_16 == vk.FALSE) return false;
-    if (req.shader_int_8 == vk.TRUE and available.shader_int_8 == vk.FALSE) return false;
-    if (req.descriptor_indexing == vk.TRUE and available.descriptor_indexing == vk.FALSE) return false;
-    if (req.shader_input_attachment_array_dynamic_indexing == vk.TRUE and available.shader_input_attachment_array_dynamic_indexing == vk.FALSE) return false;
-    if (req.shader_uniform_texel_buffer_array_dynamic_indexing == vk.TRUE and available.shader_uniform_texel_buffer_array_dynamic_indexing == vk.FALSE) return false;
-    if (req.shader_storage_texel_buffer_array_dynamic_indexing == vk.TRUE and available.shader_storage_texel_buffer_array_dynamic_indexing == vk.FALSE) return false;
-    if (req.shader_uniform_buffer_array_non_uniform_indexing == vk.TRUE and available.shader_uniform_buffer_array_non_uniform_indexing == vk.FALSE) return false;
-    if (req.shader_sampled_image_array_non_uniform_indexing == vk.TRUE and available.shader_sampled_image_array_non_uniform_indexing == vk.FALSE) return false;
-    if (req.shader_storage_buffer_array_non_uniform_indexing == vk.TRUE and available.shader_storage_buffer_array_non_uniform_indexing == vk.FALSE) return false;
-    if (req.shader_storage_image_array_non_uniform_indexing == vk.TRUE and available.shader_storage_image_array_non_uniform_indexing == vk.FALSE) return false;
-    if (req.shader_input_attachment_array_non_uniform_indexing == vk.TRUE and available.shader_input_attachment_array_non_uniform_indexing == vk.FALSE) return false;
-    if (req.shader_uniform_texel_buffer_array_non_uniform_indexing == vk.TRUE and available.shader_uniform_texel_buffer_array_non_uniform_indexing == vk.FALSE) return false;
-    if (req.shader_storage_texel_buffer_array_non_uniform_indexing == vk.TRUE and available.shader_storage_texel_buffer_array_non_uniform_indexing == vk.FALSE) return false;
-    if (req.descriptor_binding_uniform_buffer_update_after_bind == vk.TRUE and available.descriptor_binding_uniform_buffer_update_after_bind == vk.FALSE) return false;
-    if (req.descriptor_binding_sampled_image_update_after_bind == vk.TRUE and available.descriptor_binding_sampled_image_update_after_bind == vk.FALSE) return false;
-    if (req.descriptor_binding_storage_image_update_after_bind == vk.TRUE and available.descriptor_binding_storage_image_update_after_bind == vk.FALSE) return false;
-    if (req.descriptor_binding_storage_buffer_update_after_bind == vk.TRUE and available.descriptor_binding_storage_buffer_update_after_bind == vk.FALSE) return false;
-    if (req.descriptor_binding_uniform_texel_buffer_update_after_bind == vk.TRUE and available.descriptor_binding_uniform_texel_buffer_update_after_bind == vk.FALSE) return false;
-    if (req.descriptor_binding_storage_texel_buffer_update_after_bind == vk.TRUE and available.descriptor_binding_storage_texel_buffer_update_after_bind == vk.FALSE) return false;
-    if (req.descriptor_binding_update_unused_while_pending == vk.TRUE and available.descriptor_binding_update_unused_while_pending == vk.FALSE) return false;
-    if (req.descriptor_binding_partially_bound == vk.TRUE and available.descriptor_binding_partially_bound == vk.FALSE) return false;
-    if (req.descriptor_binding_variable_descriptor_count == vk.TRUE and available.descriptor_binding_variable_descriptor_count == vk.FALSE) return false;
-    if (req.runtime_descriptor_array == vk.TRUE and available.runtime_descriptor_array == vk.FALSE) return false;
-    if (req.sampler_filter_minmax == vk.TRUE and available.sampler_filter_minmax == vk.FALSE) return false;
-    if (req.scalar_block_layout == vk.TRUE and available.scalar_block_layout == vk.FALSE) return false;
-    if (req.imageless_framebuffer == vk.TRUE and available.imageless_framebuffer == vk.FALSE) return false;
-    if (req.uniform_buffer_standard_layout == vk.TRUE and available.uniform_buffer_standard_layout == vk.FALSE) return false;
-    if (req.shader_subgroup_extended_types == vk.TRUE and available.shader_subgroup_extended_types == vk.FALSE) return false;
-    if (req.separate_depth_stencil_layouts == vk.TRUE and available.separate_depth_stencil_layouts == vk.FALSE) return false;
-    if (req.host_query_reset == vk.TRUE and available.host_query_reset == vk.FALSE) return false;
-    if (req.timeline_semaphore == vk.TRUE and available.timeline_semaphore == vk.FALSE) return false;
-    if (req.buffer_device_address == vk.TRUE and available.buffer_device_address == vk.FALSE) return false;
-    if (req.buffer_device_address_capture_replay == vk.TRUE and available.buffer_device_address_capture_replay == vk.FALSE) return false;
-    if (req.buffer_device_address_multi_device == vk.TRUE and available.buffer_device_address_multi_device == vk.FALSE) return false;
-    if (req.vulkan_memory_model == vk.TRUE and available.vulkan_memory_model == vk.FALSE) return false;
-    if (req.vulkan_memory_model_device_scope == vk.TRUE and available.vulkan_memory_model_device_scope == vk.FALSE) return false;
-    if (req.vulkan_memory_model_availability_visibility_chains == vk.TRUE and available.vulkan_memory_model_availability_visibility_chains == vk.FALSE) return false;
-    if (req.shader_output_viewport_index == vk.TRUE and available.shader_output_viewport_index == vk.FALSE) return false;
-    if (req.shader_output_layer == vk.TRUE and available.shader_output_layer == vk.FALSE) return false;
-    if (req.subgroup_broadcast_dynamic_id == vk.TRUE and available.subgroup_broadcast_dynamic_id == vk.FALSE) return false;
+    if (req.sampler_mirror_clamp_to_edge == .true and available.sampler_mirror_clamp_to_edge == .false) return false;
+    if (req.draw_indirect_count == .true and available.draw_indirect_count == .false) return false;
+    if (req.storage_buffer_8_bit_access == .true and available.storage_buffer_8_bit_access == .false) return false;
+    if (req.uniform_and_storage_buffer_8_bit_access == .true and available.uniform_and_storage_buffer_8_bit_access == .false) return false;
+    if (req.storage_push_constant_8 == .true and available.storage_push_constant_8 == .false) return false;
+    if (req.shader_buffer_int_64_atomics == .true and available.shader_buffer_int_64_atomics == .false) return false;
+    if (req.shader_shared_int_64_atomics == .true and available.shader_shared_int_64_atomics == .false) return false;
+    if (req.shader_float_16 == .true and available.shader_float_16 == .false) return false;
+    if (req.shader_int_8 == .true and available.shader_int_8 == .false) return false;
+    if (req.descriptor_indexing == .true and available.descriptor_indexing == .false) return false;
+    if (req.shader_input_attachment_array_dynamic_indexing == .true and available.shader_input_attachment_array_dynamic_indexing == .false) return false;
+    if (req.shader_uniform_texel_buffer_array_dynamic_indexing == .true and available.shader_uniform_texel_buffer_array_dynamic_indexing == .false) return false;
+    if (req.shader_storage_texel_buffer_array_dynamic_indexing == .true and available.shader_storage_texel_buffer_array_dynamic_indexing == .false) return false;
+    if (req.shader_uniform_buffer_array_non_uniform_indexing == .true and available.shader_uniform_buffer_array_non_uniform_indexing == .false) return false;
+    if (req.shader_sampled_image_array_non_uniform_indexing == .true and available.shader_sampled_image_array_non_uniform_indexing == .false) return false;
+    if (req.shader_storage_buffer_array_non_uniform_indexing == .true and available.shader_storage_buffer_array_non_uniform_indexing == .false) return false;
+    if (req.shader_storage_image_array_non_uniform_indexing == .true and available.shader_storage_image_array_non_uniform_indexing == .false) return false;
+    if (req.shader_input_attachment_array_non_uniform_indexing == .true and available.shader_input_attachment_array_non_uniform_indexing == .false) return false;
+    if (req.shader_uniform_texel_buffer_array_non_uniform_indexing == .true and available.shader_uniform_texel_buffer_array_non_uniform_indexing == .false) return false;
+    if (req.shader_storage_texel_buffer_array_non_uniform_indexing == .true and available.shader_storage_texel_buffer_array_non_uniform_indexing == .false) return false;
+    if (req.descriptor_binding_uniform_buffer_update_after_bind == .true and available.descriptor_binding_uniform_buffer_update_after_bind == .false) return false;
+    if (req.descriptor_binding_sampled_image_update_after_bind == .true and available.descriptor_binding_sampled_image_update_after_bind == .false) return false;
+    if (req.descriptor_binding_storage_image_update_after_bind == .true and available.descriptor_binding_storage_image_update_after_bind == .false) return false;
+    if (req.descriptor_binding_storage_buffer_update_after_bind == .true and available.descriptor_binding_storage_buffer_update_after_bind == .false) return false;
+    if (req.descriptor_binding_uniform_texel_buffer_update_after_bind == .true and available.descriptor_binding_uniform_texel_buffer_update_after_bind == .false) return false;
+    if (req.descriptor_binding_storage_texel_buffer_update_after_bind == .true and available.descriptor_binding_storage_texel_buffer_update_after_bind == .false) return false;
+    if (req.descriptor_binding_update_unused_while_pending == .true and available.descriptor_binding_update_unused_while_pending == .false) return false;
+    if (req.descriptor_binding_partially_bound == .true and available.descriptor_binding_partially_bound == .false) return false;
+    if (req.descriptor_binding_variable_descriptor_count == .true and available.descriptor_binding_variable_descriptor_count == .false) return false;
+    if (req.runtime_descriptor_array == .true and available.runtime_descriptor_array == .false) return false;
+    if (req.sampler_filter_minmax == .true and available.sampler_filter_minmax == .false) return false;
+    if (req.scalar_block_layout == .true and available.scalar_block_layout == .false) return false;
+    if (req.imageless_framebuffer == .true and available.imageless_framebuffer == .false) return false;
+    if (req.uniform_buffer_standard_layout == .true and available.uniform_buffer_standard_layout == .false) return false;
+    if (req.shader_subgroup_extended_types == .true and available.shader_subgroup_extended_types == .false) return false;
+    if (req.separate_depth_stencil_layouts == .true and available.separate_depth_stencil_layouts == .false) return false;
+    if (req.host_query_reset == .true and available.host_query_reset == .false) return false;
+    if (req.timeline_semaphore == .true and available.timeline_semaphore == .false) return false;
+    if (req.buffer_device_address == .true and available.buffer_device_address == .false) return false;
+    if (req.buffer_device_address_capture_replay == .true and available.buffer_device_address_capture_replay == .false) return false;
+    if (req.buffer_device_address_multi_device == .true and available.buffer_device_address_multi_device == .false) return false;
+    if (req.vulkan_memory_model == .true and available.vulkan_memory_model == .false) return false;
+    if (req.vulkan_memory_model_device_scope == .true and available.vulkan_memory_model_device_scope == .false) return false;
+    if (req.vulkan_memory_model_availability_visibility_chains == .true and available.vulkan_memory_model_availability_visibility_chains == .false) return false;
+    if (req.shader_output_viewport_index == .true and available.shader_output_viewport_index == .false) return false;
+    if (req.shader_output_layer == .true and available.shader_output_layer == .false) return false;
+    if (req.subgroup_broadcast_dynamic_id == .true and available.subgroup_broadcast_dynamic_id == .false) return false;
 
     return true;
 }
@@ -648,21 +648,21 @@ fn supportsRequiredFeatures13(available: vk.PhysicalDeviceVulkan13Features, requ
     if (required == null) return true;
 
     const req = required.?;
-    if (req.robust_image_access == vk.TRUE and available.robust_image_access == vk.FALSE) return false;
-    if (req.inline_uniform_block == vk.TRUE and available.inline_uniform_block == vk.FALSE) return false;
-    if (req.descriptor_binding_inline_uniform_block_update_after_bind == vk.TRUE and available.descriptor_binding_inline_uniform_block_update_after_bind == vk.FALSE) return false;
-    if (req.pipeline_creation_cache_control == vk.TRUE and available.pipeline_creation_cache_control == vk.FALSE) return false;
-    if (req.private_data == vk.TRUE and available.private_data == vk.FALSE) return false;
-    if (req.shader_demote_to_helper_invocation == vk.TRUE and available.shader_demote_to_helper_invocation == vk.FALSE) return false;
-    if (req.shader_terminate_invocation == vk.TRUE and available.shader_terminate_invocation == vk.FALSE) return false;
-    if (req.subgroup_size_control == vk.TRUE and available.subgroup_size_control == vk.FALSE) return false;
-    if (req.compute_full_subgroups == vk.TRUE and available.compute_full_subgroups == vk.FALSE) return false;
-    if (req.synchronization_2 == vk.TRUE and available.synchronization_2 == vk.FALSE) return false;
-    if (req.texture_compression_astc_hdr == vk.TRUE and available.texture_compression_astc_hdr == vk.FALSE) return false;
-    if (req.shader_zero_initialize_workgroup_memory == vk.TRUE and available.shader_zero_initialize_workgroup_memory == vk.FALSE) return false;
-    if (req.dynamic_rendering == vk.TRUE and available.dynamic_rendering == vk.FALSE) return false;
-    if (req.shader_integer_dot_product == vk.TRUE and available.shader_integer_dot_product == vk.FALSE) return false;
-    if (req.maintenance_4 == vk.TRUE and available.maintenance_4 == vk.FALSE) return false;
+    if (req.robust_image_access == .true and available.robust_image_access == .false) return false;
+    if (req.inline_uniform_block == .true and available.inline_uniform_block == .false) return false;
+    if (req.descriptor_binding_inline_uniform_block_update_after_bind == .true and available.descriptor_binding_inline_uniform_block_update_after_bind == .false) return false;
+    if (req.pipeline_creation_cache_control == .true and available.pipeline_creation_cache_control == .false) return false;
+    if (req.private_data == .true and available.private_data == .false) return false;
+    if (req.shader_demote_to_helper_invocation == .true and available.shader_demote_to_helper_invocation == .false) return false;
+    if (req.shader_terminate_invocation == .true and available.shader_terminate_invocation == .false) return false;
+    if (req.subgroup_size_control == .true and available.subgroup_size_control == .false) return false;
+    if (req.compute_full_subgroups == .true and available.compute_full_subgroups == .false) return false;
+    if (req.synchronization_2 == .true and available.synchronization_2 == .false) return false;
+    if (req.texture_compression_astc_hdr == .true and available.texture_compression_astc_hdr == .false) return false;
+    if (req.shader_zero_initialize_workgroup_memory == .true and available.shader_zero_initialize_workgroup_memory == .false) return false;
+    if (req.dynamic_rendering == .true and available.dynamic_rendering == .false) return false;
+    if (req.shader_integer_dot_product == .true and available.shader_integer_dot_product == .false) return false;
+    if (req.maintenance_4 == .true and available.maintenance_4 == .false) return false;
     return true;
 }
 
@@ -670,26 +670,26 @@ fn supportsRequiredFeatures14(available: vk.PhysicalDeviceVulkan14Features, requ
     if (required == null) return true;
 
     const req = required.?;
-    if (req.global_priority_query == vk.TRUE and available.global_priority_query == vk.FALSE) return false;
-    if (req.shader_subgroup_rotate == vk.TRUE and available.shader_subgroup_rotate == vk.FALSE) return false;
-    if (req.shader_subgroup_rotate_clustered == vk.TRUE and available.shader_subgroup_rotate_clustered == vk.FALSE) return false;
-    if (req.shader_float_controls_2 == vk.TRUE and available.shader_float_controls_2 == vk.FALSE) return false;
-    if (req.shader_expect_assume == vk.TRUE and available.shader_expect_assume == vk.FALSE) return false;
-    if (req.rectangular_lines == vk.TRUE and available.rectangular_lines == vk.FALSE) return false;
-    if (req.bresenham_lines == vk.TRUE and available.bresenham_lines == vk.FALSE) return false;
-    if (req.smooth_lines == vk.TRUE and available.smooth_lines == vk.FALSE) return false;
-    if (req.stippled_rectangular_lines == vk.TRUE and available.stippled_rectangular_lines == vk.FALSE) return false;
-    if (req.stippled_bresenham_lines == vk.TRUE and available.stippled_bresenham_lines == vk.FALSE) return false;
-    if (req.stippled_smooth_lines == vk.TRUE and available.stippled_smooth_lines == vk.FALSE) return false;
-    if (req.vertex_attribute_instance_rate_divisor == vk.TRUE and available.vertex_attribute_instance_rate_divisor == vk.FALSE) return false;
-    if (req.vertex_attribute_instance_rate_zero_divisor == vk.TRUE and available.vertex_attribute_instance_rate_zero_divisor == vk.FALSE) return false;
-    if (req.index_type_uint_8 == vk.TRUE and available.index_type_uint_8 == vk.FALSE) return false;
-    if (req.dynamic_rendering_local_read == vk.TRUE and available.dynamic_rendering_local_read == vk.FALSE) return false;
-    if (req.maintenance_5 == vk.TRUE and available.maintenance_5 == vk.FALSE) return false;
-    if (req.maintenance_6 == vk.TRUE and available.maintenance_6 == vk.FALSE) return false;
-    if (req.pipeline_protected_access == vk.TRUE and available.pipeline_protected_access == vk.FALSE) return false;
-    if (req.pipeline_robustness == vk.TRUE and available.pipeline_robustness == vk.FALSE) return false;
-    if (req.host_image_copy == vk.TRUE and available.host_image_copy == vk.FALSE) return false;
-    if (req.push_descriptor == vk.TRUE and available.push_descriptor == vk.FALSE) return false;
+    if (req.global_priority_query == .true and available.global_priority_query == .false) return false;
+    if (req.shader_subgroup_rotate == .true and available.shader_subgroup_rotate == .false) return false;
+    if (req.shader_subgroup_rotate_clustered == .true and available.shader_subgroup_rotate_clustered == .false) return false;
+    if (req.shader_float_controls_2 == .true and available.shader_float_controls_2 == .false) return false;
+    if (req.shader_expect_assume == .true and available.shader_expect_assume == .false) return false;
+    if (req.rectangular_lines == .true and available.rectangular_lines == .false) return false;
+    if (req.bresenham_lines == .true and available.bresenham_lines == .false) return false;
+    if (req.smooth_lines == .true and available.smooth_lines == .false) return false;
+    if (req.stippled_rectangular_lines == .true and available.stippled_rectangular_lines == .false) return false;
+    if (req.stippled_bresenham_lines == .true and available.stippled_bresenham_lines == .false) return false;
+    if (req.stippled_smooth_lines == .true and available.stippled_smooth_lines == .false) return false;
+    if (req.vertex_attribute_instance_rate_divisor == .true and available.vertex_attribute_instance_rate_divisor == .false) return false;
+    if (req.vertex_attribute_instance_rate_zero_divisor == .true and available.vertex_attribute_instance_rate_zero_divisor == .false) return false;
+    if (req.index_type_uint_8 == .true and available.index_type_uint_8 == .false) return false;
+    if (req.dynamic_rendering_local_read == .true and available.dynamic_rendering_local_read == .false) return false;
+    if (req.maintenance_5 == .true and available.maintenance_5 == .false) return false;
+    if (req.maintenance_6 == .true and available.maintenance_6 == .false) return false;
+    if (req.pipeline_protected_access == .true and available.pipeline_protected_access == .false) return false;
+    if (req.pipeline_robustness == .true and available.pipeline_robustness == .false) return false;
+    if (req.host_image_copy == .true and available.host_image_copy == .false) return false;
+    if (req.push_descriptor == .true and available.push_descriptor == .false) return false;
     return true;
 }
