@@ -46,6 +46,10 @@ pub const CreateOptions = struct {
     enable_validation: bool = builtin.mode == .Debug,
     /// Debug messenger settings
     debug_messenger: DebugMessengerSettings = .{},
+    /// Enabled validation features
+    enabled_validation_features: []const vk.ValidationFeatureEnableEXT = &.{},
+    /// Disabled validation features
+    disabled_validation_features: []const vk.ValidationFeatureDisableEXT = &.{},
 };
 
 pub const DebugMessengerSettings = struct {
@@ -129,22 +133,42 @@ pub fn create(
     );
     defer allocator.free(required_layers);
 
-    const debug_messenger_info: *const vk.DebugUtilsMessengerCreateInfoEXT = &.{
+    const portability_enumeration_support = isExtensionAvailable(
+        available_extensions,
+        vk.extensions.khr_portability_enumeration.name,
+    );
+
+    var debug_messenger_info: vk.DebugUtilsMessengerCreateInfoEXT = .{
         .p_next = options.p_next_chain,
         .message_severity = options.debug_messenger.message_severity,
         .message_type = options.debug_messenger.message_type,
         .pfn_user_callback = options.debug_messenger.callback,
         .p_user_data = options.debug_messenger.user_data,
     };
-    const p_next: ?*anyopaque = switch (options.debug_messenger.enable) {
-        true => @ptrCast(@constCast(debug_messenger_info)),
-        false => options.p_next_chain,
+
+    var validation_features: vk.ValidationFeaturesEXT = .{
+        .enabled_validation_feature_count = @intCast(options.enabled_validation_features.len),
+        .p_enabled_validation_features = options.enabled_validation_features.ptr,
+        .disabled_validation_feature_count = @intCast(options.disabled_validation_features.len),
+        .p_disabled_validation_features = options.disabled_validation_features.ptr,
     };
 
-    const portability_enumeration_support = isExtensionAvailable(
-        available_extensions,
-        vk.extensions.khr_portability_enumeration.name,
-    );
+    const has_validations_features =
+        options.enabled_validation_features.len != 0 or
+        options.disabled_validation_features.len != 0;
+
+    var p_next = options.p_next_chain;
+    if (options.debug_messenger.enable and has_validations_features) {
+        p_next = @ptrCast(&debug_messenger_info);
+        debug_messenger_info.p_next = @ptrCast(&validation_features);
+        validation_features.p_next = options.p_next_chain;
+    } else if (options.debug_messenger.enable) {
+        p_next = @ptrCast(&debug_messenger_info);
+        debug_messenger_info.p_next = options.p_next_chain;
+    } else {
+        p_next = @ptrCast(&validation_features);
+        validation_features.p_next = options.p_next_chain;
+    }
 
     const instance_info = vk.InstanceCreateInfo{
         .flags = if (portability_enumeration_support) .{ .enumerate_portability_bit_khr = true } else .{},

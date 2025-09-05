@@ -31,6 +31,7 @@ pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContex
             .required_api_version = vk.API_VERSION_1_3,
             .enable_validation = true,
             .debug_messenger = .{ .enable = true },
+            .enabled_validation_features = &.{.best_practices_ext},
         },
         null,
     );
