@@ -207,7 +207,9 @@ pub fn createDebugMessenger(
         .p_user_data = options.user_data,
     };
 
-    return try instance.createDebugUtilsMessengerEXT(&debug_info, allocation_callbacks);
+    const messenger = try instance.createDebugUtilsMessengerEXT(&debug_info, allocation_callbacks);
+
+    return messenger;
 }
 
 pub fn destroyDebugMessenger(
@@ -223,21 +225,35 @@ pub fn destroyDebugMessenger(
 
 fn defaultDebugMessageCallback(
     severity: vk.DebugUtilsMessageSeverityFlagsEXT,
-    _: vk.DebugUtilsMessageTypeFlagsEXT,
+    msg_type: vk.DebugUtilsMessageTypeFlagsEXT,
     p_callback_data: ?*const vk.DebugUtilsMessengerCallbackDataEXT,
     _: ?*anyopaque,
 ) callconv(vk.vulkan_call_conv) vk.Bool32 {
     if (p_callback_data) |data| {
-        const format = "{?s}";
-
         if (severity.error_bit_ext) {
-            vk_log.err(format, .{data.p_message});
+            if (msg_type.validation_bit_ext) {
+                vk_log.err("{?s}\n{?s}", .{ data.p_message_id_name, data.p_message });
+            } else {
+                vk_log.err("{?s}", .{data.p_message});
+            }
         } else if (severity.warning_bit_ext) {
-            vk_log.warn(format, .{data.p_message});
+            if (msg_type.validation_bit_ext) {
+                vk_log.warn("{?s}\n{?s}", .{ data.p_message_id_name, data.p_message });
+            } else {
+                vk_log.warn("{?s}", .{data.p_message});
+            }
         } else if (severity.info_bit_ext) {
-            vk_log.info(format, .{data.p_message});
+            if (msg_type.validation_bit_ext) {
+                vk_log.info("{?s}\n{?s}", .{ data.p_message_id_name, data.p_message });
+            } else {
+                vk_log.info("{?s}", .{data.p_message});
+            }
         } else {
-            vk_log.debug(format, .{data.p_message});
+            if (msg_type.validation_bit_ext) {
+                vk_log.debug("{?s}\n{?s}", .{ data.p_message_id_name, data.p_message });
+            } else {
+                vk_log.debug("{?s}", .{data.p_message});
+            }
         }
     }
     return .false;
