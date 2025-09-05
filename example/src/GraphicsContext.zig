@@ -21,17 +21,16 @@ present_queue_index: u32,
 graphics_queue: Queue,
 present_queue: Queue,
 
-extern fn glfwGetInstanceProcAddress(instance: vk.Instance, procname: [*:0]const u8) vk.PfnVoidFunction;
-
 pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContext {
     const is_debug = builtin.mode == .Debug;
 
     const instance = try vkk.instance.create(
         allocator,
-        glfwGetInstanceProcAddress,
+        c.glfwGetInstanceProcAddress,
         .{
             .required_api_version = vk.API_VERSION_1_3,
-            .enable_validation = if (builtin.mode == .Debug) true else false,
+            .enable_validation = true,
+            .debug_messenger = .{ .enable = true },
         },
         null,
     );

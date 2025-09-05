@@ -41,7 +41,7 @@ pub const QueuePreference = enum {
 
 pub const SelectOptions = struct {
     /// Vulkan render surface.
-    surface: vk.SurfaceKHR,
+    surface: vk.SurfaceKHR = .null_handle,
     /// Name of the device to select.
     name: ?[*:0]const u8 = null,
     /// Required Vulkan version (minimum 1.1).
@@ -92,7 +92,6 @@ pub fn select(
     options: SelectOptions,
 ) SelectError!PhysicalDevice {
     std.debug.assert(instance.handle != .null_handle);
-    std.debug.assert(options.surface != .null_handle);
     std.debug.assert(@as(u32, @bitCast(options.required_api_version)) >= @as(u32, @bitCast(vk.API_VERSION_1_1)));
 
     const physical_device_handles = try instance.enumeratePhysicalDevicesAlloc(allocator);
@@ -394,8 +393,11 @@ fn isDeviceSuitable(
     if (!isExtensionAvailable(device.available_extensions, vk.extensions.khr_swapchain.name)) {
         return false;
     }
-    if (!try isCompatibleWithSurface(instance, device.handle, surface)) {
-        return false;
+
+    if (surface != .null_handle) {
+        if (!try isCompatibleWithSurface(instance, device.handle, surface)) {
+            return false;
+        }
     }
 
     const heap_count = device.memory_properties.memory_heap_count;
@@ -487,7 +489,10 @@ fn getPhysicalDeviceInfo(
         .{ .compute_bit = true },
         .{ .transfer_bit = true },
     );
-    const present_queue_index = try getPresentQueue(instance, handle, queue_families, surface);
+    const present_queue_index = switch (surface) {
+        .null_handle => null,
+        else => try getPresentQueue(instance, handle, queue_families, surface),
+    };
 
     const portability_ext_available = isExtensionAvailable(available_extensions, vk.extensions.khr_portability_subset.name);
 

@@ -38,15 +38,19 @@ pub const CreateOptions = struct {
     required_extensions: []const [*:0]const u8 = &.{},
     /// Array of required layers to enable.
     required_layers: []const [*:0]const u8 = &.{},
+    /// Headless mode
+    headless: bool = false,
     /// pNext chain.
     p_next_chain: ?*anyopaque = null,
-    /// Enable validation layers and debug messenger
-    enable_validation: bool = if (builtin.mode == .Debug) true else false,
+    /// Enable validation layers
+    enable_validation: bool = builtin.mode == .Debug,
     /// Debug messenger settings
     debug_messenger: DebugMessengerSettings = .{},
 };
 
 pub const DebugMessengerSettings = struct {
+    /// Enable debug messenger
+    enable: bool = builtin.mode == .Debug,
     /// Custom debug callback function (or use default).
     callback: vk.PfnDebugUtilsMessengerCallbackEXT = defaultDebugMessageCallback,
     /// Debug message severity filter.
@@ -112,7 +116,8 @@ pub fn create(
         allocator,
         options.required_extensions,
         available_extensions,
-        options.enable_validation,
+        options.debug_messenger.enable,
+        options.headless,
     );
     defer allocator.free(required_extensions);
 
@@ -131,7 +136,7 @@ pub fn create(
         .pfn_user_callback = options.debug_messenger.callback,
         .p_user_data = options.debug_messenger.user_data,
     };
-    const p_next: ?*anyopaque = switch (options.enable_validation) {
+    const p_next: ?*anyopaque = switch (options.debug_messenger.enable) {
         true => @ptrCast(@constCast(debug_messenger_info)),
         false => options.p_next_chain,
     };
@@ -164,8 +169,6 @@ pub fn create(
         log.debug("----- instance creation -----", .{});
 
         log.debug("instance version: {}.{}.{}", .{ instance_version.major, instance_version.minor, instance_version.patch });
-
-        log.debug("validation layers: {s}", .{if (options.enable_validation) "enabled" else "disabled"});
 
         log.debug("available extensions:", .{});
         for (available_extensions) |ext| {
@@ -289,7 +292,8 @@ fn getRequiredExtensions(
     allocator: Allocator,
     config_extensions: []const [*:0]const u8,
     available_extensions: []const vk.ExtensionProperties,
-    enable_validation: bool,
+    enable_debug_messenger: bool,
+    headless: bool,
 ) ![][*:0]const u8 {
     var required_extensions: std.ArrayList([*:0]const u8) = .empty;
 
@@ -299,29 +303,31 @@ fn getRequiredExtensions(
         }
     }
 
-    if (!try addExtension(allocator, available_extensions, vk.extensions.khr_surface.name, &required_extensions)) {
-        return error.SurfaceExtensionNotAvailable;
+    if (!headless) {
+        if (!try addExtension(allocator, available_extensions, vk.extensions.khr_surface.name, &required_extensions)) {
+            return error.SurfaceExtensionNotAvailable;
+        }
+
+        const windowing_extensions: []const [*:0]const u8 = switch (builtin.os.tag) {
+            .windows => &.{vk.extensions.khr_win_32_surface.name},
+            .macos => &.{vk.extensions.ext_metal_surface.name},
+            .linux => &.{
+                vk.extensions.khr_xlib_surface.name,
+                vk.extensions.khr_xcb_surface.name,
+                vk.extensions.khr_wayland_surface.name,
+            },
+            else => @compileError("unsupported platform"),
+        };
+
+        var added_one = false;
+        for (windowing_extensions) |ext| {
+            added_one = try addExtension(allocator, available_extensions, ext, &required_extensions) or added_one;
+        }
+
+        if (!added_one) return error.WindowingExtensionNotAvailable;
     }
 
-    const windowing_extensions: []const [*:0]const u8 = switch (builtin.os.tag) {
-        .windows => &.{vk.extensions.khr_win_32_surface.name},
-        .macos => &.{vk.extensions.ext_metal_surface.name},
-        .linux => &.{
-            vk.extensions.khr_xlib_surface.name,
-            vk.extensions.khr_xcb_surface.name,
-            vk.extensions.khr_wayland_surface.name,
-        },
-        else => @compileError("unsupported platform"),
-    };
-
-    var added_one = false;
-    for (windowing_extensions) |ext| {
-        added_one = try addExtension(allocator, available_extensions, ext, &required_extensions) or added_one;
-    }
-
-    if (!added_one) return error.WindowingExtensionNotAvailable;
-
-    if (enable_validation) {
+    if (enable_debug_messenger) {
         if (!try addExtension(allocator, available_extensions, vk.extensions.ext_debug_utils.name, &required_extensions)) {
             return error.DebugMessengerExtensionNotAvailable;
         }
