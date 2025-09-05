@@ -24,6 +24,8 @@ present_queue: Queue,
 extern fn glfwGetInstanceProcAddress(instance: vk.Instance, procname: [*:0]const u8) vk.PfnVoidFunction;
 
 pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContext {
+    const is_debug = builtin.mode == .Debug;
+
     const instance = try vkk.instance.create(
         allocator,
         glfwGetInstanceProcAddress,
@@ -35,8 +37,11 @@ pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContex
     );
     errdefer instance.destroyInstance(null);
 
-    const debug_messenger = try vkk.instance.createDebugMessenger(instance, .{}, null);
-    errdefer vkk.instance.destroyDebugMessenger(instance, debug_messenger, null);
+    const debug_messenger = switch (is_debug) {
+        true => try vkk.instance.createDebugMessenger(instance, .{}, null),
+        false => .null_handle,
+    };
+    errdefer if (is_debug) vkk.instance.destroyDebugMessenger(instance, debug_messenger, null);
 
     var surface: vk.SurfaceKHR = .null_handle;
     if (c.glfwCreateWindowSurface(instance.handle, window, null, &surface) != .success)
