@@ -40,11 +40,13 @@ pub const CreateOptions = struct {
     required_layers: []const [*:0]const u8 = &.{},
     /// pNext chain.
     p_next_chain: ?*anyopaque = null,
-    /// Debug messenger options
-    debug: DebugMessengerOptions = .{},
+    /// Enable validation layers and debug messenger
+    enable_validation: bool = if (builtin.mode == .Debug) true else false,
+    /// Debug messenger settings
+    debug_messenger: DebugMessengerSettings = .{},
 };
 
-pub const DebugMessengerOptions = struct {
+pub const DebugMessengerSettings = struct {
     /// Custom debug callback function (or use default).
     callback: vk.PfnDebugUtilsMessengerCallbackEXT = defaultDebugMessageCallback,
     /// Debug message severity filter.
@@ -106,19 +108,33 @@ pub fn create(
     const available_layers = try dispatch.vkb().enumerateInstanceLayerPropertiesAlloc(allocator);
     defer allocator.free(available_layers);
 
-    const required_extensions = try getRequiredExtensions(allocator, options.required_extensions, available_extensions);
+    const required_extensions = try getRequiredExtensions(
+        allocator,
+        options.required_extensions,
+        available_extensions,
+        options.enable_validation,
+    );
     defer allocator.free(required_extensions);
 
-    const required_layers = try getRequiredLayers(allocator, options.required_layers, available_layers);
+    const required_layers = try getRequiredLayers(
+        allocator,
+        options.required_layers,
+        available_layers,
+        options.enable_validation,
+    );
     defer allocator.free(required_layers);
 
-    const p_next = if (build_options.enable_validation) &vk.DebugUtilsMessengerCreateInfoEXT{
+    const debug_messenger_info: *const vk.DebugUtilsMessengerCreateInfoEXT = &.{
         .p_next = options.p_next_chain,
-        .message_severity = options.debug.message_severity,
-        .message_type = options.debug.message_type,
-        .pfn_user_callback = options.debug.callback,
-        .p_user_data = options.debug.user_data,
-    } else options.p_next_chain;
+        .message_severity = options.debug_messenger.message_severity,
+        .message_type = options.debug_messenger.message_type,
+        .pfn_user_callback = options.debug_messenger.callback,
+        .p_user_data = options.debug_messenger.user_data,
+    };
+    const p_next: ?*anyopaque = switch (options.enable_validation) {
+        true => @ptrCast(@constCast(debug_messenger_info)),
+        false => options.p_next_chain,
+    };
 
     const portability_enumeration_support = isExtensionAvailable(
         available_extensions,
@@ -149,7 +165,7 @@ pub fn create(
 
         log.debug("instance version: {}.{}.{}", .{ instance_version.major, instance_version.minor, instance_version.patch });
 
-        log.debug("validation layers: {s}", .{if (build_options.enable_validation) "enabled" else "disabled"});
+        log.debug("validation layers: {s}", .{if (options.enable_validation) "enabled" else "disabled"});
 
         log.debug("available extensions:", .{});
         for (available_extensions) |ext| {
@@ -179,11 +195,9 @@ pub fn create(
 
 pub fn createDebugMessenger(
     instance: Instance,
-    options: DebugMessengerOptions,
+    options: DebugMessengerSettings,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) !?vk.DebugUtilsMessengerEXT {
-    if (!build_options.enable_validation) return null;
-
     std.debug.assert(instance.handle != .null_handle);
 
     const debug_info = vk.DebugUtilsMessengerCreateInfoEXT{
@@ -201,8 +215,6 @@ pub fn destroyDebugMessenger(
     debug_messenger: ?vk.DebugUtilsMessengerEXT,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) void {
-    if (!build_options.enable_validation) return;
-
     std.debug.assert(instance.handle != .null_handle);
     std.debug.assert(debug_messenger != null);
 
@@ -261,6 +273,7 @@ fn getRequiredExtensions(
     allocator: Allocator,
     config_extensions: []const [*:0]const u8,
     available_extensions: []const vk.ExtensionProperties,
+    enable_validation: bool,
 ) ![][*:0]const u8 {
     var required_extensions: std.ArrayList([*:0]const u8) = .empty;
 
@@ -292,7 +305,7 @@ fn getRequiredExtensions(
 
     if (!added_one) return error.WindowingExtensionNotAvailable;
 
-    if (build_options.enable_validation) {
+    if (enable_validation) {
         if (!try addExtension(allocator, available_extensions, vk.extensions.ext_debug_utils.name, &required_extensions)) {
             return error.DebugMessengerExtensionNotAvailable;
         }
@@ -333,6 +346,7 @@ fn getRequiredLayers(
     allocator: Allocator,
     config_layers: []const [*:0]const u8,
     available_layers: []const vk.LayerProperties,
+    enable_validation: bool,
 ) ![][*:0]const u8 {
     var required_layers: std.ArrayList([*:0]const u8) = .empty;
 
@@ -342,7 +356,7 @@ fn getRequiredLayers(
         }
     }
 
-    if (build_options.enable_validation) {
+    if (enable_validation) {
         for (validation_layers) |layer| {
             if (!try addLayer(allocator, available_layers, layer, &required_layers)) {
                 return error.ValidationLayersNotAvailable;

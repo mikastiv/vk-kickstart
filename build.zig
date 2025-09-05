@@ -18,11 +18,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const enable_validation = b.option(bool, "enable_validation", "Enable vulkan validation layers");
     const verbose = b.option(bool, "verbose", "Enable debug output");
 
     const build_options = b.addOptions();
-    build_options.addOption(bool, "enable_validation", enable_validation orelse false);
     build_options.addOption(bool, "verbose", verbose orelse false);
 
     const kickstart = b.addModule("vk-kickstart", .{

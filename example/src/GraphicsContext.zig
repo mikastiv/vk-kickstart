@@ -1,6 +1,7 @@
 const vk = @import("vulkan");
 const vkk = @import("vk-kickstart");
 const std = @import("std");
+const builtin = @import("builtin");
 const c = @import("c.zig");
 const GraphicsContext = @This();
 
@@ -26,7 +27,10 @@ pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContex
     const instance = try vkk.instance.create(
         allocator,
         glfwGetInstanceProcAddress,
-        .{ .required_api_version = vk.API_VERSION_1_3 },
+        .{
+            .required_api_version = vk.API_VERSION_1_3,
+            .enable_validation = if (builtin.mode == .Debug) true else false,
+        },
         null,
     );
     errdefer instance.destroyInstance(null);

@@ -5,7 +5,6 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const vk_kickstart = b.dependency("vk_kickstart", .{
-        .enable_validation = if (optimize == .Debug) true else false,
         .verbose = true,
     });
 

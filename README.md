@@ -76,8 +76,10 @@ pub const CreateOptions = struct {
     required_layers: []const [*:0]const u8 = &.{},
     /// pNext chain.
     p_next_chain: ?*anyopaque = null,
-    /// Debug messenger options
-    debug: DebugMessengerOptions = .{},
+    /// Enable validation layers and debug messenger
+    enable_validation: bool = if (builtin.mode == .Debug) true else false,
+    /// Debug messenger settings
+    debug: DebugMessengerSettings = .{},
 };
 ```
 
