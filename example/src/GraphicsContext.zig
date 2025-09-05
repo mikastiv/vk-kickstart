@@ -56,8 +56,6 @@ pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContex
             vk.extensions.khr_ray_tracing_pipeline.name,
             vk.extensions.khr_acceleration_structure.name,
             vk.extensions.khr_deferred_host_operations.name,
-            vk.extensions.khr_buffer_device_address.name,
-            vk.extensions.ext_descriptor_indexing.name,
         },
         .required_features = .{
             .sampler_anisotropy = .true,
