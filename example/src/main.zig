@@ -81,19 +81,15 @@ pub fn main() !void {
     );
     defer device.destroySwapchainKHR(swapchain.handle, null);
 
-    var images = try allocator.alloc(vk.Image, swapchain.image_count);
+    var images = try swapchain.getImagesAlloc(allocator);
     defer allocator.free(images);
 
-    try swapchain.getImages(images);
-
-    var image_views = try allocator.alloc(vk.ImageView, swapchain.image_count);
-    defer allocator.free(image_views);
-
-    try swapchain.getImageViews(images, image_views, null);
+    var image_views = try swapchain.getImageViewsAlloc(allocator, images, null);
     defer {
         for (image_views) |view| {
             device.destroyImageView(view, null);
         }
+        allocator.free(image_views);
     }
 
     const render_pass = try createRenderPass(device, swapchain.image_format);

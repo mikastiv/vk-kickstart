@@ -189,6 +189,27 @@ pub fn getImages(self: *const Swapchain, buffer: []vk.Image) GetImagesError!void
     }
 }
 
+pub const GetImagesAllocError = Allocator.Error || GetImagesError;
+
+/// Returns an array of the swapchain's images.
+///
+/// Caller owns the memory.
+pub fn getImagesAlloc(self: *const Swapchain, allocator: std.mem.Allocator) GetImagesAllocError![]vk.Image {
+    var image_count: u32 = 0;
+    var result = try self.device.getSwapchainImagesKHR(self.handle, &image_count, null);
+    if (result != .success) return error.GetSwapchainImagesFailed;
+
+    const images = try allocator.alloc(vk.Image, image_count);
+    errdefer allocator.free(images);
+
+    while (true) {
+        result = try self.device.getSwapchainImagesKHR(self.handle, &image_count, images.ptr);
+        if (result == .success) break;
+    }
+
+    return images;
+}
+
 pub const GetImageViewsError = Device.CreateImageViewError;
 
 /// Returns an array of image views to the images.
@@ -234,7 +255,7 @@ pub fn getImageViews(
     }
 }
 
-pub const GetImageViewsErrorAlloc = Allocator.Error || Device.CreateImageViewError;
+pub const GetImageViewsErrorAlloc = Allocator.Error || GetImageViewsError;
 
 /// Returns an array of image views to the images.
 ///
@@ -246,9 +267,11 @@ pub fn getImageViewsAlloc(
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) GetImageViewsErrorAlloc![]vk.ImageView {
     const image_views = try allocator.alloc(vk.ImageView, images.len);
+
+    var initialized_count: u32 = 0;
     errdefer {
-        for (image_views) |view| {
-            self.device.destroyImageView(view, allocation_callbacks);
+        for (0..initialized_count) |i| {
+            self.device.destroyImageView(image_views[i], allocation_callbacks);
         }
         allocator.free(image_views);
     }
@@ -274,6 +297,7 @@ pub fn getImageViewsAlloc(
         };
 
         image_views[i] = try self.device.createImageView(&image_view_info, allocation_callbacks);
+        initialized_count += 1;
     }
 
     return image_views;
