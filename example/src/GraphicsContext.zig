@@ -53,6 +53,7 @@ pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContex
         .surface = surface,
         .required_api_version = vk.API_VERSION_1_2,
         .required_extensions = &.{
+            vk.extensions.khr_swapchain.name,
             vk.extensions.khr_ray_tracing_pipeline.name,
             vk.extensions.khr_acceleration_structure.name,
             vk.extensions.khr_deferred_host_operations.name,

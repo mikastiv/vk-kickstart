@@ -65,7 +65,7 @@ pub const SelectOptions = struct {
     /// Required physical device feature version 1.4.
     required_features_14: ?vk.PhysicalDeviceVulkan14Features = null,
     /// Array of required physical device extensions to enable.
-    /// Note: VK_KHR_swapchain and VK_KHR_subset (if available) are automatically enabled.
+    /// Note: VK_KHR_portability_subset (if available) is automatically enabled.
     required_extensions: []const [*:0]const u8 = &.{},
 };
 
@@ -182,8 +182,6 @@ pub fn select(
     if (selected.portability_ext_available) {
         try extensions.append(allocator, vk.extensions.khr_portability_subset.name);
     }
-
-    try extensions.append(allocator, vk.extensions.khr_swapchain.name);
 
     if (build_options.verbose) {
         const device_name: [*:0]const u8 = @ptrCast(&selected.properties.device_name);
