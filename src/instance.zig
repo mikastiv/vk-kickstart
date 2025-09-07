@@ -22,7 +22,7 @@ const default_message_type: vk.DebugUtilsMessageTypeFlagsEXT = .{
     .performance_bit_ext = true,
 };
 
-pub const CreateOptions = struct {
+pub const CreateSettings = struct {
     /// Application name.
     app_name: [*:0]const u8 = "",
     /// Application version.
@@ -89,7 +89,7 @@ pub const CreateError = Error ||
 pub fn create(
     allocator: Allocator,
     loader: anytype,
-    options: CreateOptions,
+    settings: CreateSettings,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) CreateError!Instance {
     dispatch.base_wrapper = vk.BaseWrapper.load(loader);
@@ -97,17 +97,17 @@ pub fn create(
     const instance_version_u32 = try dispatch.vkb().enumerateInstanceVersion();
     const instance_version: vk.Version = @bitCast(instance_version_u32);
 
-    if (instance_version_u32 < @as(u32, @bitCast(options.required_api_version)))
+    if (instance_version_u32 < @as(u32, @bitCast(settings.required_api_version)))
         return error.RequiredVersionNotAvailable;
     if (instance_version_u32 < @as(u32, @bitCast(vk.API_VERSION_1_1)))
         return error.UnsupportedInstanceVersion;
 
     const app_info = vk.ApplicationInfo{
-        .p_application_name = options.app_name,
-        .application_version = @bitCast(options.app_version),
-        .p_engine_name = options.engine_name,
-        .engine_version = @bitCast(options.engine_version),
-        .api_version = @bitCast(options.required_api_version),
+        .p_application_name = settings.app_name,
+        .application_version = @bitCast(settings.app_version),
+        .p_engine_name = settings.engine_name,
+        .engine_version = @bitCast(settings.engine_version),
+        .api_version = @bitCast(settings.required_api_version),
     };
 
     const available_extensions = try dispatch.vkb().enumerateInstanceExtensionPropertiesAlloc(null, allocator);
@@ -118,18 +118,18 @@ pub fn create(
 
     const required_extensions = try getRequiredExtensions(
         allocator,
-        options.required_extensions,
+        settings.required_extensions,
         available_extensions,
-        options.debug_messenger.enable,
-        options.headless,
+        settings.debug_messenger.enable,
+        settings.headless,
     );
     defer allocator.free(required_extensions);
 
     const required_layers = try getRequiredLayers(
         allocator,
-        options.required_layers,
+        settings.required_layers,
         available_layers,
-        options.enable_validation,
+        settings.enable_validation,
     );
     defer allocator.free(required_layers);
 
@@ -139,35 +139,35 @@ pub fn create(
     );
 
     var debug_messenger_info: vk.DebugUtilsMessengerCreateInfoEXT = .{
-        .p_next = options.p_next_chain,
-        .message_severity = options.debug_messenger.message_severity,
-        .message_type = options.debug_messenger.message_type,
-        .pfn_user_callback = options.debug_messenger.callback,
-        .p_user_data = options.debug_messenger.user_data,
+        .p_next = settings.p_next_chain,
+        .message_severity = settings.debug_messenger.message_severity,
+        .message_type = settings.debug_messenger.message_type,
+        .pfn_user_callback = settings.debug_messenger.callback,
+        .p_user_data = settings.debug_messenger.user_data,
     };
 
     var validation_features: vk.ValidationFeaturesEXT = .{
-        .enabled_validation_feature_count = @intCast(options.enabled_validation_features.len),
-        .p_enabled_validation_features = options.enabled_validation_features.ptr,
-        .disabled_validation_feature_count = @intCast(options.disabled_validation_features.len),
-        .p_disabled_validation_features = options.disabled_validation_features.ptr,
+        .enabled_validation_feature_count = @intCast(settings.enabled_validation_features.len),
+        .p_enabled_validation_features = settings.enabled_validation_features.ptr,
+        .disabled_validation_feature_count = @intCast(settings.disabled_validation_features.len),
+        .p_disabled_validation_features = settings.disabled_validation_features.ptr,
     };
 
     const has_validations_features =
-        options.enabled_validation_features.len != 0 or
-        options.disabled_validation_features.len != 0;
+        settings.enabled_validation_features.len != 0 or
+        settings.disabled_validation_features.len != 0;
 
-    var p_next = options.p_next_chain;
-    if (options.debug_messenger.enable and has_validations_features) {
+    var p_next = settings.p_next_chain;
+    if (settings.debug_messenger.enable and has_validations_features) {
         p_next = @ptrCast(&debug_messenger_info);
         debug_messenger_info.p_next = @ptrCast(&validation_features);
-        validation_features.p_next = options.p_next_chain;
-    } else if (options.debug_messenger.enable) {
+        validation_features.p_next = settings.p_next_chain;
+    } else if (settings.debug_messenger.enable) {
         p_next = @ptrCast(&debug_messenger_info);
-        debug_messenger_info.p_next = options.p_next_chain;
+        debug_messenger_info.p_next = settings.p_next_chain;
     } else {
         p_next = @ptrCast(&validation_features);
-        validation_features.p_next = options.p_next_chain;
+        validation_features.p_next = settings.p_next_chain;
     }
 
     const instance_info = vk.InstanceCreateInfo{
@@ -185,7 +185,7 @@ pub fn create(
 
     const handle = try dispatch.vkb().createInstance(&instance_info, allocation_callbacks);
     vki.* = vk.InstanceWrapper.load(handle, dispatch.vkb().dispatch.vkGetInstanceProcAddr.?);
-    errdefer vki.destroyInstance(handle, options.allocation_callbacks);
+    errdefer vki.destroyInstance(handle, settings.allocation_callbacks);
 
     const instance = Instance.init(handle, vki);
 
@@ -222,16 +222,16 @@ pub fn create(
 
 pub fn createDebugMessenger(
     instance: Instance,
-    options: DebugMessengerSettings,
+    settings: DebugMessengerSettings,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) !?vk.DebugUtilsMessengerEXT {
     std.debug.assert(instance.handle != .null_handle);
 
     const debug_info = vk.DebugUtilsMessengerCreateInfoEXT{
-        .message_severity = options.message_severity,
-        .message_type = options.message_type,
-        .pfn_user_callback = options.callback,
-        .p_user_data = options.user_data,
+        .message_severity = settings.message_severity,
+        .message_type = settings.message_type,
+        .pfn_user_callback = settings.callback,
+        .p_user_data = settings.user_data,
     };
 
     const messenger = try instance.createDebugUtilsMessengerEXT(&debug_info, allocation_callbacks);

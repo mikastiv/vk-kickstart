@@ -39,7 +39,7 @@ pub const QueuePreference = enum {
     separate,
 };
 
-pub const SelectOptions = struct {
+pub const SelectSettings = struct {
     /// Vulkan render surface.
     surface: vk.SurfaceKHR = .null_handle,
     /// Name of the device to select.
@@ -89,10 +89,10 @@ pub const SelectError = Error ||
 pub fn select(
     allocator: Allocator,
     instance: Instance,
-    options: SelectOptions,
+    settings: SelectSettings,
 ) SelectError!PhysicalDevice {
     std.debug.assert(instance.handle != .null_handle);
-    std.debug.assert(@as(u32, @bitCast(options.required_api_version)) >= @as(u32, @bitCast(vk.API_VERSION_1_1)));
+    std.debug.assert(@as(u32, @bitCast(settings.required_api_version)) >= @as(u32, @bitCast(vk.API_VERSION_1_1)));
 
     const physical_device_handles = try instance.enumeratePhysicalDevicesAlloc(allocator);
     defer allocator.free(physical_device_handles);
@@ -107,12 +107,12 @@ pub fn select(
     }
 
     for (physical_device_handles) |handle| {
-        const physical_device_info = try getPhysicalDeviceInfo(allocator, instance, handle, options.surface, instance_version);
+        const physical_device_info = try getPhysicalDeviceInfo(allocator, instance, handle, settings.surface, instance_version);
         try physical_device_infos.append(allocator, physical_device_info);
     }
 
     for (physical_device_infos.items) |*info| {
-        info.suitable = try isDeviceSuitable(instance, info, options.surface, options);
+        info.suitable = try isDeviceSuitable(instance, info, settings.surface, settings);
     }
 
     if (build_options.verbose) {
@@ -168,14 +168,14 @@ pub fn select(
         }
     }
 
-    std.sort.insertion(PhysicalDeviceInfo, physical_device_infos.items, options, comparePhysicalDevices);
+    std.sort.insertion(PhysicalDeviceInfo, physical_device_infos.items, settings, comparePhysicalDevices);
 
     const selected = &physical_device_infos.items[0];
     if (!selected.suitable) return error.NoSuitableDeviceFound;
 
     var extensions: std.ArrayList([*:0]const u8) = .empty;
 
-    for (options.required_extensions) |ext| {
+    for (settings.required_extensions) |ext| {
         try extensions.append(allocator, ext);
     }
 
@@ -191,22 +191,22 @@ pub fn select(
     return .{
         .allocator = allocator,
         .handle = selected.handle,
-        .features = options.required_features,
-        .features_11 = options.required_features_11,
-        .features_12 = if (options.required_features_12) |features| features else .{},
-        .features_13 = if (options.required_features_13) |features| features else .{},
-        .features_14 = if (options.required_features_14) |features| features else .{},
+        .features = settings.required_features,
+        .features_11 = settings.required_features_11,
+        .features_12 = if (settings.required_features_12) |features| features else .{},
+        .features_13 = if (settings.required_features_13) |features| features else .{},
+        .features_14 = if (settings.required_features_14) |features| features else .{},
         .properties = selected.properties,
         .memory_properties = selected.memory_properties,
         .extensions = try extensions.toOwnedSlice(allocator),
         .graphics_queue_index = selected.graphics_queue_index.?,
         .present_queue_index = selected.present_queue_index,
-        .transfer_queue_index = switch (options.transfer_queue) {
+        .transfer_queue_index = switch (settings.transfer_queue) {
             .none => null,
             .dedicated => selected.dedicated_transfer_queue_index,
             .separate => selected.separate_transfer_queue_index,
         },
-        .compute_queue_index = switch (options.compute_queue) {
+        .compute_queue_index = switch (settings.compute_queue) {
             .none => null,
             .dedicated => selected.dedicated_compute_queue_index,
             .separate => selected.separate_compute_queue_index,
@@ -318,13 +318,13 @@ fn getQueueNoGraphics(
     return index;
 }
 
-fn comparePhysicalDevices(options: SelectOptions, a: PhysicalDeviceInfo, b: PhysicalDeviceInfo) bool {
+fn comparePhysicalDevices(settings: SelectSettings, a: PhysicalDeviceInfo, b: PhysicalDeviceInfo) bool {
     if (a.suitable != b.suitable) {
         return a.suitable;
     }
 
-    const a_is_prefered_type = a.properties.device_type == options.preferred_type;
-    const b_is_prefered_type = b.properties.device_type == options.preferred_type;
+    const a_is_prefered_type = a.properties.device_type == settings.preferred_type;
+    const b_is_prefered_type = b.properties.device_type == settings.preferred_type;
     if (a_is_prefered_type != b_is_prefered_type) {
         return a_is_prefered_type;
     }
@@ -359,29 +359,29 @@ fn isDeviceSuitable(
     instance: Instance,
     device: *const PhysicalDeviceInfo,
     surface: vk.SurfaceKHR,
-    options: SelectOptions,
+    settings: SelectSettings,
 ) !bool {
-    if (options.name) |n| {
+    if (settings.name) |n| {
         const device_name: [*:0]const u8 = @ptrCast(&device.properties.device_name);
         if (std.mem.orderZ(u8, n, device_name) != .eq) return false;
     }
 
-    const required_version: u32 = @bitCast(options.required_api_version);
+    const required_version: u32 = @bitCast(settings.required_api_version);
     const device_version: u32 = @bitCast(device.properties.api_version);
     if (device_version < required_version) return false;
 
-    if (options.transfer_queue == .dedicated and device.dedicated_transfer_queue_index == null) return false;
-    if (options.transfer_queue == .separate and device.separate_transfer_queue_index == null) return false;
-    if (options.compute_queue == .dedicated and device.dedicated_compute_queue_index == null) return false;
-    if (options.compute_queue == .separate and device.separate_compute_queue_index == null) return false;
+    if (settings.transfer_queue == .dedicated and device.dedicated_transfer_queue_index == null) return false;
+    if (settings.transfer_queue == .separate and device.separate_transfer_queue_index == null) return false;
+    if (settings.compute_queue == .dedicated and device.dedicated_compute_queue_index == null) return false;
+    if (settings.compute_queue == .separate and device.separate_compute_queue_index == null) return false;
 
-    if (!supportsRequiredFeatures(device.features, options.required_features)) return false;
-    if (!supportsRequiredFeatures11(device.features_11, options.required_features_11)) return false;
-    if (!supportsRequiredFeatures12(device.features_12, options.required_features_12)) return false;
-    if (!supportsRequiredFeatures13(device.features_13, options.required_features_13)) return false;
-    if (!supportsRequiredFeatures14(device.features_14, options.required_features_14)) return false;
+    if (!supportsRequiredFeatures(device.features, settings.required_features)) return false;
+    if (!supportsRequiredFeatures11(device.features_11, settings.required_features_11)) return false;
+    if (!supportsRequiredFeatures12(device.features_12, settings.required_features_12)) return false;
+    if (!supportsRequiredFeatures13(device.features_13, settings.required_features_13)) return false;
+    if (!supportsRequiredFeatures14(device.features_14, settings.required_features_14)) return false;
 
-    for (options.required_extensions) |ext| {
+    for (settings.required_extensions) |ext| {
         if (!isExtensionAvailable(device.available_extensions, ext)) {
             return false;
         }
@@ -400,7 +400,7 @@ fn isDeviceSuitable(
 
     const heap_count = device.memory_properties.memory_heap_count;
     for (device.memory_properties.memory_heaps[0..heap_count]) |heap| {
-        if (heap.flags.device_local_bit and heap.size >= options.required_mem_size) {
+        if (heap.flags.device_local_bit and heap.size >= settings.required_mem_size) {
             break;
         }
     } else {

@@ -23,7 +23,7 @@ color_space: vk.ColorSpaceKHR,
 extent: vk.Extent2D,
 present_mode: vk.PresentModeKHR,
 
-pub const CreateOptions = struct {
+pub const CreateSettings = struct {
     /// Graphics queue index
     graphics_queue_index: u32,
     /// Present queue index
@@ -85,7 +85,7 @@ pub fn create(
     device: Device,
     physical_device: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
-    options: CreateOptions,
+    settings: CreateSettings,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) CreateError!Swapchain {
     std.debug.assert(surface != .null_handle);
@@ -100,45 +100,45 @@ pub fn create(
     const present_modes = try instance.getPhysicalDeviceSurfacePresentModesAllocKHR(physical_device, surface, allocator);
     defer allocator.free(present_modes);
 
-    const min_image_count = selectMinImageCount(&capabilities, options.desired_min_image_count);
-    const format = pickSurfaceFormat(formats, options.desired_formats);
-    const present_mode = pickPresentMode(present_modes, options.desired_present_modes);
-    const extent = pickExtent(&capabilities, options.desired_extent);
+    const min_image_count = selectMinImageCount(&capabilities, settings.desired_min_image_count);
+    const format = pickSurfaceFormat(formats, settings.desired_formats);
+    const present_mode = pickPresentMode(present_modes, settings.desired_present_modes);
+    const extent = pickExtent(&capabilities, settings.desired_extent);
 
-    const array_layer_count = if (capabilities.max_image_array_layers < options.desired_array_layer_count)
+    const array_layer_count = if (capabilities.max_image_array_layers < settings.desired_array_layer_count)
         capabilities.max_image_array_layers
     else
-        options.desired_array_layer_count;
+        settings.desired_array_layer_count;
 
     if (isSharedPresentMode(present_mode)) {
         // TODO: Shared present modes check
     } else {
         const supported_flags = capabilities.supported_usage_flags;
-        if (options.image_usage_flags.intersect(supported_flags).toInt() == 0)
+        if (settings.image_usage_flags.intersect(supported_flags).toInt() == 0)
             return error.UsageFlagsNotSupported;
     }
 
-    const same_index = options.graphics_queue_index == options.present_queue_index;
-    const queue_family_indices = [_]u32{ options.graphics_queue_index, options.present_queue_index };
+    const same_index = settings.graphics_queue_index == settings.present_queue_index;
+    const queue_family_indices = [_]u32{ settings.graphics_queue_index, settings.present_queue_index };
 
     const swapchain_info = vk.SwapchainCreateInfoKHR{
-        .p_next = options.p_next_chain,
-        .flags = options.create_flags,
+        .p_next = settings.p_next_chain,
+        .flags = settings.create_flags,
         .surface = surface,
         .min_image_count = min_image_count,
         .image_format = format.format,
         .image_color_space = format.color_space,
         .image_extent = extent,
         .image_array_layers = array_layer_count,
-        .image_usage = options.image_usage_flags,
+        .image_usage = settings.image_usage_flags,
         .image_sharing_mode = if (same_index) .exclusive else .concurrent,
         .queue_family_index_count = if (same_index) 0 else @intCast(queue_family_indices.len),
         .p_queue_family_indices = if (same_index) null else @ptrCast(&queue_family_indices),
-        .pre_transform = if (options.pre_transform) |pre_transform| pre_transform else capabilities.current_transform,
-        .composite_alpha = options.composite_alpha,
+        .pre_transform = if (settings.pre_transform) |pre_transform| pre_transform else capabilities.current_transform,
+        .composite_alpha = settings.composite_alpha,
         .present_mode = present_mode,
-        .clipped = options.clipped,
-        .old_swapchain = if (options.old_swapchain) |old| old else .null_handle,
+        .clipped = settings.clipped,
+        .old_swapchain = if (settings.old_swapchain) |old| old else .null_handle,
     };
 
     const swapchain = try device.createSwapchainKHR(&swapchain_info, allocation_callbacks);
@@ -166,7 +166,7 @@ pub fn create(
         .image_format = format.format,
         .color_space = format.color_space,
         .extent = extent,
-        .image_usage = options.image_usage_flags,
+        .image_usage = settings.image_usage_flags,
         .present_mode = present_mode,
     };
 }
