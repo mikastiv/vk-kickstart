@@ -66,7 +66,9 @@ pub fn create(
         log.debug("----- device creation -----", .{});
         log.debug("queue count: {d}", .{queue_create_infos.len});
         log.debug("graphics queue family index: {d}", .{physical_device.graphics_queue_index});
-        log.debug("present queue family index: {d}", .{physical_device.present_queue_index});
+        if (physical_device.present_queue_index) |family| {
+            log.debug("present queue family index: {d}", .{family});
+        }
         if (physical_device.transfer_queue_index) |family| {
             log.debug("transfer queue family index: {d}", .{family});
         }
@@ -114,7 +116,9 @@ fn createQueueInfos(
     defer unique_queue_families.deinit();
 
     try unique_queue_families.put(physical_device.graphics_queue_index, {});
-    try unique_queue_families.put(physical_device.present_queue_index, {});
+    if (physical_device.present_queue_index) |idx| {
+        try unique_queue_families.put(idx, {});
+    }
     if (physical_device.transfer_queue_index) |idx| {
         try unique_queue_families.put(idx, {});
     }

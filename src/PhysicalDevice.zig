@@ -23,7 +23,7 @@ features_13: vk.PhysicalDeviceVulkan13Features,
 features_14: vk.PhysicalDeviceVulkan14Features,
 extensions: [][*:0]const u8,
 graphics_queue_index: u32,
-present_queue_index: u32,
+present_queue_index: ?u32,
 transfer_queue_index: ?u32,
 compute_queue_index: ?u32,
 
@@ -200,7 +200,7 @@ pub fn select(
         .memory_properties = selected.memory_properties,
         .extensions = try extensions.toOwnedSlice(allocator),
         .graphics_queue_index = selected.graphics_queue_index.?,
-        .present_queue_index = selected.present_queue_index.?,
+        .present_queue_index = selected.present_queue_index,
         .transfer_queue_index = switch (options.transfer_queue) {
             .none => null,
             .dedicated => selected.dedicated_transfer_queue_index,

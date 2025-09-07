@@ -78,7 +78,7 @@ pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContex
     errdefer device.destroyDevice(null);
 
     const graphics_queue_index = physical_device.graphics_queue_index;
-    const present_queue_index = physical_device.present_queue_index;
+    const present_queue_index = physical_device.present_queue_index orelse return error.NoPresentQueue;
     const graphics_queue_handle = device.getDeviceQueue(graphics_queue_index, 0);
     const present_queue_handle = device.getDeviceQueue(present_queue_index, 0);
     const graphics_queue = Queue.init(graphics_queue_handle, device.wrapper);
