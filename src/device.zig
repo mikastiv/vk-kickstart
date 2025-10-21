@@ -33,9 +33,15 @@ pub fn create(
     var features_11 = physical_device.features_11;
     var features_12 = physical_device.features_12;
     var features_13 = physical_device.features_13;
+    var features_14 = physical_device.features_14;
 
     features.p_next = &features_11;
-    if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3))) {
+    if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_4))) {
+        features_11.p_next = &features_12;
+        features_12.p_next = &features_13;
+        features_13.p_next = &features_14;
+        features_14.p_next = p_next_chain;
+    } else if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3))) {
         features_11.p_next = &features_12;
         features_12.p_next = &features_13;
         features_13.p_next = p_next_chain;
@@ -92,6 +98,10 @@ pub fn create(
         if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3))) {
             log.debug("enabled features (vulkan 1.3):", .{});
             printEnabledFeatures(vk.PhysicalDeviceVulkan13Features, features_13);
+        }
+        if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_4))) {
+            log.debug("enabled features (vulkan 1.4):", .{});
+            printEnabledFeatures(vk.PhysicalDeviceVulkan14Features, features_14);
         }
     }
 
