@@ -86,6 +86,7 @@ pub const CreateError = Error ||
     vk.BaseWrapper.EnumerateInstanceLayerPropertiesError ||
     vk.BaseWrapper.CreateInstanceError;
 
+/// Create a Vulkan instance. Instance.wrapper field is allocated memory owned by the caller.
 pub fn create(
     allocator: Allocator,
     loader: anytype,

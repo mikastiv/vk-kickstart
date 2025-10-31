@@ -17,6 +17,7 @@ const CreateError = Error ||
     Allocator.Error ||
     Instance.CreateDeviceError;
 
+/// Create a Vulkan device. Device.wrapper field is allocated memory owned by the caller.
 pub fn create(
     allocator: Allocator,
     instance: Instance,
