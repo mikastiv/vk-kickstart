@@ -26,8 +26,6 @@ Then update your build file with the following:
 const registry = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
 const vk_kickstart = b.dependency("vk_kickstart", .{
     .registry = registry,
-    // Enable validation layers and debug messenger
-    .enable_validation = if (optimize == .Debug) true else false,
     // Verbose output
     .verbose = true,
 });
