@@ -56,13 +56,13 @@ pub const SelectSettings = struct {
     required_mem_size: vk.DeviceSize = 0,
     /// Required physical device features.
     required_features: vk.PhysicalDeviceFeatures = .{},
-    /// Required physical device feature version 1.1.
+    /// Required physical device features version 1.1.
     required_features_11: vk.PhysicalDeviceVulkan11Features = .{},
-    /// Required physical device feature version 1.2.
+    /// Required physical device features version 1.2.
     required_features_12: ?vk.PhysicalDeviceVulkan12Features = null,
-    /// Required physical device feature version 1.3.
+    /// Required physical device features version 1.3.
     required_features_13: ?vk.PhysicalDeviceVulkan13Features = null,
-    /// Required physical device feature version 1.4.
+    /// Required physical device features version 1.4.
     required_features_14: ?vk.PhysicalDeviceVulkan14Features = null,
     /// Array of required physical device extensions to enable.
     /// Note: VK_KHR_portability_subset (if available) is automatically enabled.
