@@ -28,7 +28,7 @@ pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContex
         allocator,
         c.glfwGetInstanceProcAddress,
         .{
-            .required_api_version = vk.API_VERSION_1_3,
+            .minimum_api_version = vk.API_VERSION_1_4,
             .enable_validation = true,
             .debug_messenger = .{ .enable = true },
             .enabled_validation_features = &.{.best_practices_ext},

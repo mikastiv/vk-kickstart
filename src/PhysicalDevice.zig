@@ -44,8 +44,12 @@ pub const SelectSettings = struct {
     surface: vk.SurfaceKHR = .null_handle,
     /// Name of the device to select.
     name: ?[*:0]const u8 = null,
-    /// Required Vulkan version (minimum 1.1).
-    required_api_version: vk.Version = vk.API_VERSION_1_1,
+    /// Required Vulkan version. If required version and minimum version are not set, the latest
+    /// version available is selected.
+    required_api_version: ?vk.Version = null,
+    /// Minimum Vulkan version. If required version and minimum version are not set, the latest
+    /// version available is selected.
+    minimum_api_version: ?vk.Version = null,
     /// Prefered physical device type.
     preferred_type: vk.PhysicalDeviceType = .discrete_gpu,
     /// Transfer queue preference.
@@ -57,7 +61,7 @@ pub const SelectSettings = struct {
     /// Required physical device features.
     required_features: vk.PhysicalDeviceFeatures = .{},
     /// Required physical device features version 1.1.
-    required_features_11: vk.PhysicalDeviceVulkan11Features = .{},
+    required_features_11: ?vk.PhysicalDeviceVulkan11Features = null,
     /// Required physical device features version 1.2.
     required_features_12: ?vk.PhysicalDeviceVulkan12Features = null,
     /// Required physical device features version 1.3.
@@ -71,9 +75,6 @@ pub const SelectSettings = struct {
 
 const Error = error{
     Overflow,
-    Features12UnsupportedByInstance,
-    Features13UnsupportedByInstance,
-    Features14UnsupportedByInstance,
     EnumeratePhysicalDevicesFailed,
     EnumeratePhysicalDeviceExtensionsFailed,
     NoSuitableDeviceFound,
@@ -92,7 +93,6 @@ pub fn select(
     settings: SelectSettings,
 ) SelectError!PhysicalDevice {
     std.debug.assert(instance.handle != .null_handle);
-    std.debug.assert(@as(u32, @bitCast(settings.required_api_version)) >= @as(u32, @bitCast(vk.API_VERSION_1_1)));
 
     const physical_device_handles = try instance.enumeratePhysicalDevicesAlloc(allocator);
     defer allocator.free(physical_device_handles);
@@ -151,8 +151,10 @@ pub fn select(
 
             log.debug(" available features:", .{});
             printAvailableFeatures(vk.PhysicalDeviceFeatures, info.features);
-            log.debug(" available features (vulkan 1.1):", .{});
-            printAvailableFeatures(vk.PhysicalDeviceVulkan11Features, info.features_11);
+            if (info.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_1))) {
+                log.debug(" available features (vulkan 1.1):", .{});
+                printAvailableFeatures(vk.PhysicalDeviceVulkan11Features, info.features_11);
+            }
             if (info.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_2))) {
                 log.debug(" available features (vulkan 1.2):", .{});
                 printAvailableFeatures(vk.PhysicalDeviceVulkan12Features, info.features_12);
@@ -192,7 +194,7 @@ pub fn select(
         .allocator = allocator,
         .handle = selected.handle,
         .features = settings.required_features,
-        .features_11 = settings.required_features_11,
+        .features_11 = if (settings.required_features_11) |features| features else .{},
         .features_12 = if (settings.required_features_12) |features| features else .{},
         .features_13 = if (settings.required_features_13) |features| features else .{},
         .features_14 = if (settings.required_features_14) |features| features else .{},
@@ -366,9 +368,12 @@ fn isDeviceSuitable(
         if (std.mem.orderZ(u8, n, device_name) != .eq) return false;
     }
 
-    const required_version: u32 = @bitCast(settings.required_api_version);
     const device_version: u32 = @bitCast(device.properties.api_version);
-    if (device_version < required_version) return false;
+    if (settings.required_api_version) |req_version| {
+        if (device_version < @as(u32, @bitCast(req_version))) return false;
+    } else if (settings.minimum_api_version) |min_version| {
+        if (device_version < @as(u32, @bitCast(min_version))) return false;
+    }
 
     if (settings.transfer_queue == .dedicated and device.dedicated_transfer_queue_index == null) return false;
     if (settings.transfer_queue == .separate and device.separate_transfer_queue_index == null) return false;
@@ -451,7 +456,8 @@ fn getPhysicalDeviceInfo(
     var features_13 = vk.PhysicalDeviceVulkan13Features{};
     var features_14 = vk.PhysicalDeviceVulkan14Features{};
 
-    features.p_next = &features_11;
+    if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_1)))
+        features.p_next = &features_11;
     if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_2)))
         features_11.p_next = &features_12;
     if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3)))
@@ -575,19 +581,22 @@ fn supportsRequiredFeatures(available: vk.PhysicalDeviceFeatures, required: vk.P
     return true;
 }
 
-fn supportsRequiredFeatures11(available: vk.PhysicalDeviceVulkan11Features, required: vk.PhysicalDeviceVulkan11Features) bool {
-    if (required.storage_buffer_16_bit_access == .true and available.storage_buffer_16_bit_access == .false) return false;
-    if (required.uniform_and_storage_buffer_16_bit_access == .true and available.uniform_and_storage_buffer_16_bit_access == .false) return false;
-    if (required.storage_push_constant_16 == .true and available.storage_push_constant_16 == .false) return false;
-    if (required.storage_input_output_16 == .true and available.storage_input_output_16 == .false) return false;
-    if (required.multiview == .true and available.multiview == .false) return false;
-    if (required.multiview_geometry_shader == .true and available.multiview_geometry_shader == .false) return false;
-    if (required.multiview_tessellation_shader == .true and available.multiview_tessellation_shader == .false) return false;
-    if (required.variable_pointers_storage_buffer == .true and available.variable_pointers_storage_buffer == .false) return false;
-    if (required.variable_pointers == .true and available.variable_pointers == .false) return false;
-    if (required.protected_memory == .true and available.protected_memory == .false) return false;
-    if (required.sampler_ycbcr_conversion == .true and available.sampler_ycbcr_conversion == .false) return false;
-    if (required.shader_draw_parameters == .true and available.shader_draw_parameters == .false) return false;
+fn supportsRequiredFeatures11(available: vk.PhysicalDeviceVulkan11Features, required: ?vk.PhysicalDeviceVulkan11Features) bool {
+    if (required == null) return true;
+
+    const req = required.?;
+    if (req.storage_buffer_16_bit_access == .true and available.storage_buffer_16_bit_access == .false) return false;
+    if (req.uniform_and_storage_buffer_16_bit_access == .true and available.uniform_and_storage_buffer_16_bit_access == .false) return false;
+    if (req.storage_push_constant_16 == .true and available.storage_push_constant_16 == .false) return false;
+    if (req.storage_input_output_16 == .true and available.storage_input_output_16 == .false) return false;
+    if (req.multiview == .true and available.multiview == .false) return false;
+    if (req.multiview_geometry_shader == .true and available.multiview_geometry_shader == .false) return false;
+    if (req.multiview_tessellation_shader == .true and available.multiview_tessellation_shader == .false) return false;
+    if (req.variable_pointers_storage_buffer == .true and available.variable_pointers_storage_buffer == .false) return false;
+    if (req.variable_pointers == .true and available.variable_pointers == .false) return false;
+    if (req.protected_memory == .true and available.protected_memory == .false) return false;
+    if (req.sampler_ycbcr_conversion == .true and available.sampler_ycbcr_conversion == .false) return false;
+    if (req.shader_draw_parameters == .true and available.shader_draw_parameters == .false) return false;
 
     return true;
 }

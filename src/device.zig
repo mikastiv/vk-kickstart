@@ -36,21 +36,26 @@ pub fn create(
     var features_13 = physical_device.features_13;
     var features_14 = physical_device.features_14;
 
-    features.p_next = &features_11;
     if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_4))) {
+        features.p_next = &features_11;
         features_11.p_next = &features_12;
         features_12.p_next = &features_13;
         features_13.p_next = &features_14;
         features_14.p_next = p_next_chain;
     } else if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3))) {
+        features.p_next = &features_11;
         features_11.p_next = &features_12;
         features_12.p_next = &features_13;
         features_13.p_next = p_next_chain;
     } else if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_2))) {
+        features.p_next = &features_11;
         features_11.p_next = &features_12;
         features_12.p_next = p_next_chain;
-    } else {
+    } else if (physical_device.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_1))) {
+        features.p_next = &features_11;
         features_11.p_next = p_next_chain;
+    } else {
+        features.p_next = p_next_chain;
     }
 
     const device_info = vk.DeviceCreateInfo{

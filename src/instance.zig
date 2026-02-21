@@ -31,8 +31,12 @@ pub const CreateSettings = struct {
     engine_name: [*:0]const u8 = "",
     /// Engine version.
     engine_version: vk.Version = vk.makeApiVersion(0, 0, 0, 0),
-    /// Required Vulkan version (minimum 1.1).
-    required_api_version: vk.Version = vk.API_VERSION_1_1,
+    /// Required Vulkan version. If required version and minimum version are not set, the latest
+    /// version available is selected.
+    required_api_version: ?vk.Version = null,
+    /// Minimum Vulkan version. If required version and minimum version are not set, the latest
+    /// version available is selected.
+    minimum_api_version: ?vk.Version = null,
     /// Array of required extensions to enable.
     /// Note: VK_KHR_surface and the platform specific surface extension are automatically enabled.
     required_extensions: []const [*:0]const u8 = &.{},
@@ -68,7 +72,7 @@ pub const DebugMessengerSettings = struct {
 const Error = error{
     Overflow,
     CommandLoadFailure,
-    UnsupportedInstanceVersion,
+    MinimumVersionNotAvailable,
     RequiredVersionNotAvailable,
     EnumerateExtensionsFailed,
     RequestedExtensionNotAvailable,
@@ -96,19 +100,26 @@ pub fn create(
     dispatch.base_wrapper = vk.BaseWrapper.load(loader);
 
     const instance_version_u32 = try dispatch.vkb().enumerateInstanceVersion();
-    const instance_version: vk.Version = @bitCast(instance_version_u32);
+    var instance_version: vk.Version = @bitCast(instance_version_u32);
 
-    if (instance_version_u32 < @as(u32, @bitCast(settings.required_api_version)))
-        return error.RequiredVersionNotAvailable;
-    if (instance_version_u32 < @as(u32, @bitCast(vk.API_VERSION_1_1)))
-        return error.UnsupportedInstanceVersion;
+    if (settings.required_api_version) |req_version| {
+        if (instance_version_u32 < @as(u32, @bitCast(req_version))) {
+            return error.RequiredVersionNotAvailable;
+        }
+
+        instance_version = req_version;
+    } else if (settings.minimum_api_version) |min_version| {
+        if (instance_version_u32 < @as(u32, @bitCast(min_version))) {
+            return error.MinimumVersionNotAvailable;
+        }
+    }
 
     const app_info = vk.ApplicationInfo{
         .p_application_name = settings.app_name,
         .application_version = @bitCast(settings.app_version),
         .p_engine_name = settings.engine_name,
         .engine_version = @bitCast(settings.engine_version),
-        .api_version = @bitCast(settings.required_api_version),
+        .api_version = @bitCast(instance_version),
     };
 
     const available_extensions = try dispatch.vkb().enumerateInstanceExtensionPropertiesAlloc(null, allocator);
