@@ -15,7 +15,7 @@
       in {
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
-            zig.packages.${system}."0.15.1"
+            zig.packages.${system}."0.15.2"
             zls.packages.${system}.zls
             glfw
             vulkan-loader
