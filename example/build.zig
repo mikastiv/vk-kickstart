@@ -43,11 +43,7 @@ pub fn build(b: *std.Build) !void {
 }
 
 fn addShader(b: *std.Build, step: *std.Build.Step.Compile, path: []const u8, name: []const u8) void {
-    var hasher = std.hash.Wyhash.init(0);
-    hasher.update(path);
-    const hash = hasher.final();
-    const hex = std.fmt.allocPrint(b.allocator, "{x}", .{hash}) catch @panic("OOM");
-    const output_name = std.mem.join(b.allocator, "", &.{ hex, ".spv" }) catch @panic("OOM");
+    const output_name = std.mem.concat(b.allocator, u8, &.{ path, ".spv" }) catch @panic("OOM");
 
     const shaderc = b.addSystemCommand(&.{ "glslc", "--target-env=vulkan1.2", "-o" });
     const shader_spv = shaderc.addOutputFileArg(output_name);
