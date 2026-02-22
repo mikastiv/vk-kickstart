@@ -24,11 +24,15 @@ present_queue: Queue,
 pub fn init(allocator: std.mem.Allocator, window: *c.GLFWwindow) !GraphicsContext {
     const is_debug = builtin.mode == .Debug;
 
+    var glfw_extensions_count: u32 = 0;
+    const glfw_extensions = c.glfwGetRequiredInstanceExtensions(&glfw_extensions_count);
+
     const instance = try vkk.instance.create(
         allocator,
         c.glfwGetInstanceProcAddress,
         .{
             .minimum_api_version = vk.API_VERSION_1_4,
+            .required_extensions = @ptrCast(glfw_extensions[0..glfw_extensions_count]),
             .enable_validation = true,
             .debug_messenger = .{ .enable = true },
             .enabled_validation_features = &.{.best_practices_ext},
