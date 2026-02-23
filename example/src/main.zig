@@ -81,7 +81,7 @@ pub fn main() !void {
     );
     defer device.destroySwapchainKHR(swapchain.handle, null);
 
-    var images = try swapchain.getImagesAlloc(allocator);
+    var images = try device.getSwapchainImagesAllocKHR(swapchain.handle, allocator);
     defer allocator.free(images);
 
     var image_views = try swapchain.getImageViewsAlloc(allocator, images, null);
@@ -95,7 +95,7 @@ pub fn main() !void {
     const render_pass = try createRenderPass(device, swapchain.image_format);
     defer device.destroyRenderPass(render_pass, null);
 
-    var framebuffers = try createFramebuffers(allocator, device, swapchain.extent, swapchain.image_count, image_views, render_pass);
+    var framebuffers = try createFramebuffers(allocator, device, swapchain.extent, image_views, render_pass);
     defer destroyFramebuffers(allocator, device, framebuffers);
 
     const sync = try createSyncObjects(allocator, device, swapchain.image_count);
@@ -279,7 +279,6 @@ fn recreateSwapchain(
         allocator,
         ctx.device,
         swapchain.extent,
-        swapchain.image_count,
         image_views.*,
         render_pass,
     );
@@ -544,11 +543,10 @@ fn createFramebuffers(
     allocator: std.mem.Allocator,
     device: Device,
     extent: vk.Extent2D,
-    image_count: u32,
     image_views: []vk.ImageView,
     render_pass: vk.RenderPass,
 ) ![]vk.Framebuffer {
-    var framebuffers = try std.ArrayList(vk.Framebuffer).initCapacity(allocator, image_count);
+    var framebuffers = try std.ArrayList(vk.Framebuffer).initCapacity(allocator, image_views.len);
     errdefer {
         for (framebuffers.items) |framebuffer| {
             device.destroyFramebuffer(framebuffer, null);
@@ -556,7 +554,7 @@ fn createFramebuffers(
         framebuffers.deinit(allocator);
     }
 
-    for (0..image_count) |i| {
+    for (0..image_views.len) |i| {
         const attachments = [_]vk.ImageView{image_views[i]};
         const framebuffer_info = vk.FramebufferCreateInfo{
             .render_pass = render_pass,

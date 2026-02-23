@@ -189,27 +189,6 @@ pub fn getImages(self: *const Swapchain, buffer: []vk.Image) GetImagesError!void
     }
 }
 
-pub const GetImagesAllocError = Allocator.Error || GetImagesError;
-
-/// Returns an array of the swapchain's images.
-///
-/// Caller owns the memory.
-pub fn getImagesAlloc(self: *const Swapchain, allocator: std.mem.Allocator) GetImagesAllocError![]vk.Image {
-    var image_count: u32 = 0;
-    var result = try self.device.getSwapchainImagesKHR(self.handle, &image_count, null);
-    if (result != .success) return error.GetSwapchainImagesFailed;
-
-    const images = try allocator.alloc(vk.Image, image_count);
-    errdefer allocator.free(images);
-
-    while (true) {
-        result = try self.device.getSwapchainImagesKHR(self.handle, &image_count, images.ptr);
-        if (result == .success) break;
-    }
-
-    return images;
-}
-
 pub const GetImageViewsError = Device.CreateImageViewError;
 
 /// Returns an array of image views to the images.
