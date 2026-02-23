@@ -96,7 +96,12 @@ pub fn main() !void {
     defer device.destroyRenderPass(render_pass, null);
 
     var framebuffers = try createFramebuffers(allocator, device, swapchain.extent, image_views, render_pass);
-    defer destroyFramebuffers(allocator, device, framebuffers);
+    defer {
+        for (framebuffers) |framebuffer| {
+            device.destroyFramebuffer(framebuffer, null);
+        }
+        allocator.free(framebuffers);
+    }
 
     const sync = try createSyncObjects(allocator, device, swapchain.image_count);
     defer destroySyncObjects(allocator, device, sync);
@@ -271,7 +276,9 @@ fn recreateSwapchain(
     }
     ctx.device.destroySwapchainKHR(old_swapchain.handle, null);
 
-    destroyFramebuffers(allocator, ctx.device, framebuffers.*);
+    for (framebuffers.*) |framebuffer| {
+        ctx.device.destroyFramebuffer(framebuffer, null);
+    }
 
     try swapchain.getImages(images.*);
     try swapchain.getImageViews(images.*, image_views.*, null);
@@ -284,13 +291,6 @@ fn recreateSwapchain(
     );
 
     return swapchain;
-}
-
-fn destroyFramebuffers(allocator: std.mem.Allocator, device: Device, framebuffers: []const vk.Framebuffer) void {
-    for (framebuffers) |framebuffer| {
-        device.destroyFramebuffer(framebuffer, null);
-    }
-    allocator.free(framebuffers);
 }
 
 fn destroySyncObjects(allocator: std.mem.Allocator, device: Device, sync: SyncObjects) void {
