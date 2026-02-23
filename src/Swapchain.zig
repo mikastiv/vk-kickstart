@@ -202,10 +202,10 @@ pub fn getImageViews(
 ) GetImageViewsError!void {
     std.debug.assert(buffer.len == images.len);
 
-    var initialized_count: u32 = 0;
+    @memset(buffer, .null_handle);
     errdefer {
-        for (0..initialized_count) |i| {
-            self.device.destroyImageView(buffer[i], allocation_callbacks);
+        for (buffer) |view| {
+            if (view != .null_handle) self.device.destroyImageView(view, allocation_callbacks);
         }
     }
 
@@ -230,7 +230,6 @@ pub fn getImageViews(
         };
 
         buffer[i] = try self.device.createImageView(&image_view_info, allocation_callbacks);
-        initialized_count += 1;
     }
 }
 
@@ -246,11 +245,10 @@ pub fn getImageViewsAlloc(
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) GetImageViewsErrorAlloc![]vk.ImageView {
     const image_views = try allocator.alloc(vk.ImageView, images.len);
-
-    var initialized_count: u32 = 0;
+    @memset(image_views, .null_handle);
     errdefer {
-        for (0..initialized_count) |i| {
-            self.device.destroyImageView(image_views[i], allocation_callbacks);
+        for (image_views) |view| {
+            if (view != .null_handle) self.device.destroyImageView(view, allocation_callbacks);
         }
         allocator.free(image_views);
     }
@@ -276,7 +274,6 @@ pub fn getImageViewsAlloc(
         };
 
         image_views[i] = try self.device.createImageView(&image_view_info, allocation_callbacks);
-        initialized_count += 1;
     }
 
     return image_views;
