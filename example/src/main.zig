@@ -31,7 +31,7 @@ const ImageSyncObjects = struct {
 };
 
 const WindowData = struct {
-    framebuffer_size_changed: bool,
+    framebuffer_resized: bool,
 };
 
 const window_width = 800;
@@ -62,7 +62,7 @@ pub fn main() !void {
     defer c.glfwDestroyWindow(window);
 
     var window_data: WindowData = .{
-        .framebuffer_size_changed = false,
+        .framebuffer_resized = false,
     };
 
     c.glfwSetWindowUserPointer(window, &window_data);
@@ -152,7 +152,7 @@ pub fn main() !void {
     while (c.glfwWindowShouldClose(window) != c.GLFW_TRUE) {
         c.glfwPollEvents();
 
-        if (window_data.framebuffer_size_changed) {
+        if (window_data.framebuffer_resized) {
             swapchain = try recreateSwapchain(
                 allocator,
                 &ctx,
@@ -164,7 +164,7 @@ pub fn main() !void {
                 framebuffers,
             );
 
-            window_data.framebuffer_size_changed = false;
+            window_data.framebuffer_resized = false;
         }
 
         const result = try device.waitForFences(1, @ptrCast(&frame_sync[current_frame].in_flight_fence), .true, std.math.maxInt(u64));
@@ -177,7 +177,7 @@ pub fn main() !void {
             .null_handle,
         ) catch |err| switch (err) {
             error.OutOfDateKHR => {
-                window_data.framebuffer_size_changed = true;
+                window_data.framebuffer_resized = true;
                 continue;
             },
             else => return err,
@@ -194,7 +194,7 @@ pub fn main() !void {
             .render_finished_semaphore = image_sync[image_index].render_finished_semaphore,
         };
 
-        window_data.framebuffer_size_changed = !try drawFrame(
+        window_data.framebuffer_resized = !try drawFrame(
             &ctx,
             command_buffers[current_frame],
             frame_sync_objects,
@@ -644,7 +644,7 @@ fn createRenderPass(device: Device, image_format: vk.Format) !vk.RenderPass {
 
 fn glfwFramebufferCallback(window: ?*c.GLFWwindow, _: c_int, _: c_int) callconv(.c) void {
     const window_data: *WindowData = @ptrCast(c.glfwGetWindowUserPointer(window));
-    window_data.framebuffer_size_changed = true;
+    window_data.framebuffer_resized = true;
 }
 
 fn glfwErrorCallback(
