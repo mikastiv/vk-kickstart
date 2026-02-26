@@ -332,12 +332,7 @@ fn getRequiredExtensions(
     headless: bool,
 ) ![][*:0]const u8 {
     var required_extensions: std.ArrayList([*:0]const u8) = .empty;
-
-    for (config_extensions) |ext| {
-        if (!try addExtension(allocator, available_extensions, ext, &required_extensions)) {
-            return error.RequestedExtensionNotAvailable;
-        }
-    }
+    errdefer required_extensions.deinit(allocator);
 
     if (!headless) {
         if (!try addExtension(allocator, available_extensions, vk.extensions.khr_surface.name, &required_extensions)) {
@@ -370,6 +365,16 @@ fn getRequiredExtensions(
     }
 
     _ = addExtension(allocator, available_extensions, vk.extensions.khr_portability_enumeration.name, &required_extensions) catch {};
+
+    loop: for (config_extensions) |ext| {
+        for (required_extensions.items) |req_ext| {
+            if (std.mem.orderZ(u8, req_ext, ext) == .eq) continue :loop;
+        }
+
+        if (!try addExtension(allocator, available_extensions, ext, &required_extensions)) {
+            return error.RequestedExtensionNotAvailable;
+        }
+    }
 
     return required_extensions.toOwnedSlice(allocator);
 }
@@ -407,6 +412,7 @@ fn getRequiredLayers(
     enable_validation: bool,
 ) ![][*:0]const u8 {
     var required_layers: std.ArrayList([*:0]const u8) = .empty;
+    errdefer required_layers.deinit(allocator);
 
     for (config_layers) |layer| {
         if (!try addLayer(allocator, available_layers, layer, &required_layers)) {
@@ -415,7 +421,11 @@ fn getRequiredLayers(
     }
 
     if (enable_validation) {
-        for (validation_layers) |layer| {
+        loop: for (validation_layers) |layer| {
+            for (required_layers.items) |req_layer| {
+                if (std.mem.orderZ(u8, req_layer, layer) == .eq) continue :loop;
+            }
+
             if (!try addLayer(allocator, available_layers, layer, &required_layers)) {
                 return error.ValidationLayersNotAvailable;
             }
