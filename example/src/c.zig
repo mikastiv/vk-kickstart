@@ -28,6 +28,10 @@ pub const glfwSetErrorCallback = c.glfwSetErrorCallback;
 pub const glfwSetKeyCallback = c.glfwSetKeyCallback;
 pub const glfwSetWindowShouldClose = c.glfwSetWindowShouldClose;
 pub const glfwWaitEvents = c.glfwWaitEvents;
+pub const glfwSetFramebufferSizeCallback = c.glfwSetFramebufferSizeCallback;
+pub const glfwSetWindowSizeCallback = c.glfwSetWindowSizeCallback;
+pub const glfwSetWindowUserPointer = c.glfwSetWindowUserPointer;
+pub const glfwGetWindowUserPointer = c.glfwGetWindowUserPointer;
 
 pub extern fn glfwGetInstanceProcAddress(
     instance: vk.Instance,
