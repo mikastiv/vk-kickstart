@@ -2,7 +2,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 const vk = @import("vulkan");
 const build_options = @import("build_options");
-const root = @import("root");
 const dispatch = @import("dispatch.zig");
 const Allocator = std.mem.Allocator;
 const Instance = vk.InstanceProxy;
@@ -21,6 +20,9 @@ const default_message_type: vk.DebugUtilsMessageTypeFlagsEXT = .{
     .validation_bit_ext = true,
     .performance_bit_ext = true,
 };
+
+pub const minimum_supported_version = vk.API_VERSION_1_1;
+pub const minimum_supported_version_u32: u32 = @bitCast(vk.API_VERSION_1_1);
 
 pub const CreateSettings = struct {
     /// Application name.
@@ -97,10 +99,17 @@ pub fn create(
     settings: CreateSettings,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) CreateError!Instance {
+    if (settings.required_api_version) |version| {
+        const wanted: u32 = @bitCast(version);
+        std.debug.assert(wanted >= minimum_supported_version_u32);
+    }
+
     dispatch.base_wrapper = vk.BaseWrapper.load(loader);
 
     const instance_version_u32 = try dispatch.vkb().enumerateInstanceVersion();
     var instance_version: vk.Version = @bitCast(instance_version_u32);
+
+    std.debug.assert(instance_version_u32 >= minimum_supported_version_u32);
 
     if (settings.required_api_version) |req_version| {
         if (instance_version_u32 < @as(u32, @bitCast(req_version))) {

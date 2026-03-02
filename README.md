@@ -11,6 +11,8 @@ This library helps with:
 - Swapchain creation
 - Getting queues
 
+Minimum Vulkan version is 1.1
+
 ## Setting up
 
 Add vk-kickstart:

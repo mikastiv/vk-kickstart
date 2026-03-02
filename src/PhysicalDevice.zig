@@ -3,9 +3,11 @@ const build_options = @import("build_options");
 const vk = @import("vulkan");
 const dispatch = @import("dispatch.zig");
 const Instance = vk.InstanceProxy;
-const root = @import("root");
 const PhysicalDevice = @This();
 const Allocator = std.mem.Allocator;
+
+const minimum_supported_version_u32 = @import("instance.zig").minimum_supported_version_u32;
+const minimum_supported_version = @import("instance.zig").minimum_supported_version;
 
 const log = @import("log.zig").vk_kickstart_log;
 
@@ -93,6 +95,10 @@ pub fn select(
     settings: SelectSettings,
 ) SelectError!PhysicalDevice {
     std.debug.assert(instance.handle != .null_handle);
+    if (settings.required_api_version) |version| {
+        const wanted: u32 = @bitCast(version);
+        std.debug.assert(wanted >= minimum_supported_version_u32);
+    }
 
     const physical_device_handles = try instance.enumeratePhysicalDevicesAlloc(allocator);
     defer allocator.free(physical_device_handles);
@@ -131,7 +137,12 @@ pub fn select(
             log.debug(" suitable: {s}", .{if (info.suitable) "yes" else "no"});
             if (info.unsuitability_reason) |reason| {
                 switch (reason) {
-                    .missing_required_extension => |r| log.debug(" unsuitability reason: {t}: {s}", .{ reason, r.extension }),
+                    .minimum_supported_version_not_available => log.debug(" minimum: {d}.{d}.{d}", .{
+                        minimum_supported_version.major,
+                        minimum_supported_version.minor,
+                        minimum_supported_version.patch,
+                    }),
+                    .missing_required_extension => |extension| log.debug(" unsuitability reason: {t}: {s}", .{ reason, extension }),
                     else => log.debug(" unsuitability reason: {t}", .{reason}),
                 }
             }
@@ -369,6 +380,7 @@ fn getLocalMemorySize(memory_properties: *const vk.PhysicalDeviceMemoryPropertie
 
 const UnsuitabilityReason = union(enum) {
     no_gpu_name_match,
+    minimum_supported_version_not_available,
     required_version_not_available,
     minimum_version_not_available,
     no_dedicated_transfer_queue,
@@ -382,7 +394,7 @@ const UnsuitabilityReason = union(enum) {
     missing_features_12,
     missing_features_13,
     missing_features_14,
-    missing_required_extension: struct { extension: [*:0]const u8 },
+    missing_required_extension: [*:0]const u8,
     missing_swapchain_extension,
     not_compatible_with_surface,
     not_enough_memory,
@@ -394,6 +406,10 @@ fn isDeviceSuitable(
     surface: vk.SurfaceKHR,
     settings: SelectSettings,
 ) !struct { bool, ?UnsuitabilityReason } {
+    if (device.properties.api_version < minimum_supported_version_u32) {
+        return .{ false, .minimum_supported_version_not_available };
+    }
+
     if (settings.name) |n| {
         const device_name: [*:0]const u8 = @ptrCast(&device.properties.device_name);
         if (std.mem.orderZ(u8, n, device_name) != .eq) return .{ false, .no_gpu_name_match };
@@ -419,7 +435,7 @@ fn isDeviceSuitable(
 
     for (settings.required_extensions) |ext| {
         if (!isExtensionAvailable(device.available_extensions, ext)) {
-            return .{ false, .{ .missing_required_extension = .{ .extension = ext } } };
+            return .{ false, .{ .missing_required_extension = ext } };
         }
     }
 
