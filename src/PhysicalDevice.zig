@@ -112,7 +112,9 @@ pub fn select(
     }
 
     for (physical_device_infos.items) |*info| {
-        info.suitable = try isDeviceSuitable(instance, info, settings.surface, settings);
+        const suitable, const reason = try isDeviceSuitable(instance, info, settings.surface, settings);
+        info.suitable = suitable;
+        info.unsuitability_reason = reason;
     }
 
     if (build_options.verbose) {
@@ -127,6 +129,13 @@ pub fn select(
             log.debug("{s}", .{device_name});
 
             log.debug(" suitable: {s}", .{if (info.suitable) "yes" else "no"});
+            if (info.unsuitability_reason) |reason| {
+                switch (reason) {
+                    .missing_required_extension => |r| log.debug(" unsuitability reason: {t}: {s}", .{ reason, r.extension }),
+                    else => log.debug(" unsuitability reason: {t}", .{reason}),
+                }
+            }
+
             const device_version: vk.Version = @bitCast(info.properties.api_version);
             log.debug(" api version: {d}.{d}.{d}", .{ device_version.major, device_version.minor, device_version.patch });
             log.debug(" device type: {s}", .{@tagName(info.properties.device_type)});
@@ -255,6 +264,7 @@ const PhysicalDeviceInfo = struct {
     separate_compute_queue_index: ?u32,
     portability_ext_available: bool,
     suitable: bool = true,
+    unsuitability_reason: ?UnsuitabilityReason = null,
 
     fn deinit(self: *PhysicalDeviceInfo, allocator: Allocator) void {
         allocator.free(self.available_extensions);
@@ -357,49 +367,77 @@ fn getLocalMemorySize(memory_properties: *const vk.PhysicalDeviceMemoryPropertie
     return size;
 }
 
+const UnsuitabilityReason = union(enum) {
+    no_gpu_name_match,
+    required_version_not_available,
+    minimum_version_not_available,
+    no_dedicated_transfer_queue,
+    no_separate_transfer_queue,
+    no_dedicated_compute_queue,
+    no_separate_compute_queue,
+    no_graphics_queue,
+    no_present_queue,
+    missing_features,
+    missing_features_11,
+    missing_features_12,
+    missing_features_13,
+    missing_features_14,
+    missing_required_extension: struct { extension: [*:0]const u8 },
+    missing_swapchain_extension,
+    not_compatible_with_surface,
+    not_enough_memory,
+};
+
 fn isDeviceSuitable(
     instance: Instance,
     device: *const PhysicalDeviceInfo,
     surface: vk.SurfaceKHR,
     settings: SelectSettings,
-) !bool {
+) !struct { bool, ?UnsuitabilityReason } {
     if (settings.name) |n| {
         const device_name: [*:0]const u8 = @ptrCast(&device.properties.device_name);
-        if (std.mem.orderZ(u8, n, device_name) != .eq) return false;
+        if (std.mem.orderZ(u8, n, device_name) != .eq) return .{ false, .no_gpu_name_match };
     }
 
     const device_version: u32 = @bitCast(device.properties.api_version);
     if (settings.required_api_version) |req_version| {
-        if (device_version < @as(u32, @bitCast(req_version))) return false;
+        if (device_version < @as(u32, @bitCast(req_version))) return .{ false, .required_version_not_available };
     } else if (settings.minimum_api_version) |min_version| {
-        if (device_version < @as(u32, @bitCast(min_version))) return false;
+        if (device_version < @as(u32, @bitCast(min_version))) return .{ false, .minimum_version_not_available };
     }
 
-    if (settings.transfer_queue == .dedicated and device.dedicated_transfer_queue_index == null) return false;
-    if (settings.transfer_queue == .separate and device.separate_transfer_queue_index == null) return false;
-    if (settings.compute_queue == .dedicated and device.dedicated_compute_queue_index == null) return false;
-    if (settings.compute_queue == .separate and device.separate_compute_queue_index == null) return false;
+    if (settings.transfer_queue == .dedicated and device.dedicated_transfer_queue_index == null) return .{ false, .no_dedicated_transfer_queue };
+    if (settings.transfer_queue == .separate and device.separate_transfer_queue_index == null) return .{ false, .no_separate_transfer_queue };
+    if (settings.compute_queue == .dedicated and device.dedicated_compute_queue_index == null) return .{ false, .no_dedicated_compute_queue };
+    if (settings.compute_queue == .separate and device.separate_compute_queue_index == null) return .{ false, .no_separate_compute_queue };
 
-    if (!supportsRequiredFeatures(device.features, settings.required_features)) return false;
-    if (!supportsRequiredFeatures11(device.features_11, settings.required_features_11)) return false;
-    if (!supportsRequiredFeatures12(device.features_12, settings.required_features_12)) return false;
-    if (!supportsRequiredFeatures13(device.features_13, settings.required_features_13)) return false;
-    if (!supportsRequiredFeatures14(device.features_14, settings.required_features_14)) return false;
+    if (!supportsRequiredFeatures(device.features, settings.required_features)) return .{ false, .missing_features };
+    if (!supportsRequiredFeatures11(device.features_11, settings.required_features_11)) return .{ false, .missing_features_11 };
+    if (!supportsRequiredFeatures12(device.features_12, settings.required_features_12)) return .{ false, .missing_features_12 };
+    if (!supportsRequiredFeatures13(device.features_13, settings.required_features_13)) return .{ false, .missing_features_13 };
+    if (!supportsRequiredFeatures14(device.features_14, settings.required_features_14)) return .{ false, .missing_features_14 };
 
     for (settings.required_extensions) |ext| {
         if (!isExtensionAvailable(device.available_extensions, ext)) {
-            return false;
+            return .{ false, .{ .missing_required_extension = .{ .extension = ext } } };
         }
     }
 
-    if (device.graphics_queue_index == null or device.present_queue_index == null) return false;
-    if (!isExtensionAvailable(device.available_extensions, vk.extensions.khr_swapchain.name)) {
-        return false;
+    if (settings.surface != .null_handle) {
+        if (device.graphics_queue_index == null) {
+            return .{ false, .no_graphics_queue };
+        }
+        if (device.present_queue_index == null) {
+            return .{ false, .no_present_queue };
+        }
+        if (!isExtensionAvailable(device.available_extensions, vk.extensions.khr_swapchain.name)) {
+            return .{ false, .missing_swapchain_extension };
+        }
     }
 
     if (surface != .null_handle) {
         if (!try isCompatibleWithSurface(instance, device.handle, surface)) {
-            return false;
+            return .{ false, .not_compatible_with_surface };
         }
     }
 
@@ -409,10 +447,10 @@ fn isDeviceSuitable(
             break;
         }
     } else {
-        return false;
+        return .{ false, .not_enough_memory };
     }
 
-    return true;
+    return .{ true, null };
 }
 
 fn isCompatibleWithSurface(instance: Instance, handle: vk.PhysicalDevice, surface: vk.SurfaceKHR) !bool {
