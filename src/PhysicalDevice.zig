@@ -439,10 +439,11 @@ fn isDeviceSuitable(
         }
     }
 
+    if (device.graphics_queue_index == null) {
+        return .{ false, .no_graphics_queue };
+    }
+
     if (settings.surface != .null_handle) {
-        if (device.graphics_queue_index == null) {
-            return .{ false, .no_graphics_queue };
-        }
         if (device.present_queue_index == null) {
             return .{ false, .no_present_queue };
         }
