@@ -10,8 +10,6 @@ const Device = vk.DeviceProxy;
 
 const log = @import("log.zig").vk_kickstart_log;
 
-const default_image_count = 3;
-
 handle: vk.SwapchainKHR,
 device: Device,
 surface: vk.SurfaceKHR,
@@ -34,7 +32,7 @@ pub const CreateSettings = struct {
     /// Swapchain create flags
     create_flags: vk.SwapchainCreateFlagsKHR = .{},
     /// Desired minimum number of presentable images that the application needs.
-    /// If left on default, will try to use the minimum of the device + 1.
+    /// If left on default, will the minimum of the device.
     /// This value will be clamped between the device's minimum and maximum (if there is a max).
     desired_min_image_count: ?u32 = null,
     /// Array of desired image formats, in order of priority.
@@ -339,14 +337,12 @@ fn pickExtent(
 
 fn selectMinImageCount(capabilities: *const vk.SurfaceCapabilitiesKHR, desired_min_image_count: ?u32) u32 {
     const has_max_count = capabilities.max_image_count > 0;
-    const target_image_count = desired_min_image_count orelse default_image_count;
-    var image_count = capabilities.min_image_count;
+    const target_image_count = desired_min_image_count orelse capabilities.min_image_count;
+    var image_count = target_image_count;
     if (target_image_count < capabilities.min_image_count)
         image_count = capabilities.min_image_count
     else if (has_max_count and target_image_count > capabilities.max_image_count)
-        image_count = capabilities.max_image_count
-    else
-        image_count = target_image_count;
+        image_count = capabilities.max_image_count;
 
     return image_count;
 }
