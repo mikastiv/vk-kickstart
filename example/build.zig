@@ -6,22 +6,22 @@ pub fn build(b: *std.Build) !void {
 
     const vk_kickstart = b.dependency("vk_kickstart", .{
         .verbose = true,
-    });
-
-    const root_module = b.createModule(.{
-        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
-        .link_libc = true,
-        .imports = &.{
-            .{ .name = "vk-kickstart", .module = vk_kickstart.module("vk-kickstart") },
-            .{ .name = "vulkan", .module = vk_kickstart.module("vulkan") },
-        },
     });
 
     const exe = b.addExecutable(.{
         .name = "kickstart_glfw_example",
-        .root_module = root_module,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "vk-kickstart", .module = vk_kickstart.module("vk-kickstart") },
+                .{ .name = "vulkan", .module = vk_kickstart.module("vulkan") },
+            },
+        }),
     });
     exe.root_module.linkSystemLibrary("glfw", .{});
 

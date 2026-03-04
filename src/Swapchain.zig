@@ -16,7 +16,6 @@ handle: vk.SwapchainKHR,
 device: Device,
 surface: vk.SurfaceKHR,
 image_count: u32,
-min_image_count: u32,
 image_format: vk.Format,
 image_usage: vk.ImageUsageFlags,
 color_space: vk.ColorSpaceKHR,
@@ -101,6 +100,7 @@ pub fn create(
     defer allocator.free(present_modes);
 
     const min_image_count = selectMinImageCount(&capabilities, settings.desired_min_image_count);
+
     const format = pickSurfaceFormat(formats, settings.desired_formats);
     const present_mode = pickPresentMode(present_modes, settings.desired_present_modes);
     const extent = pickExtent(&capabilities, settings.desired_extent);
@@ -161,7 +161,6 @@ pub fn create(
         .handle = swapchain,
         .device = device,
         .surface = surface,
-        .min_image_count = min_image_count,
         .image_count = image_count,
         .image_format = format.format,
         .color_space = format.color_space,
