@@ -8,6 +8,8 @@ const Device = vk.DeviceProxy;
 
 const log = @import("log.zig").vk_kickstart_log;
 
+const assert = std.debug.assert;
+
 const Error = error{
     OutOfMemory,
     CommandLoadFailure,
@@ -25,7 +27,7 @@ pub fn create(
     p_next_chain: ?*anyopaque,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) CreateError!Device {
-    std.debug.assert(physical_device.handle != .null_handle);
+    assert(physical_device.handle != .null_handle);
 
     const queue_create_infos = try createQueueInfos(allocator, physical_device);
     defer allocator.free(queue_create_infos);

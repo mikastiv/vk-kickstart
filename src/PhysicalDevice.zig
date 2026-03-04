@@ -11,6 +11,8 @@ const minimum_supported_version = @import("instance.zig").minimum_supported_vers
 
 const log = @import("log.zig").vk_kickstart_log;
 
+const assert = std.debug.assert;
+
 /// Max number of unique queues. At this time: graphics, present, compute and transfer.
 pub const max_unique_queues = 4;
 
@@ -94,10 +96,10 @@ pub fn select(
     instance: Instance,
     settings: SelectSettings,
 ) SelectError!PhysicalDevice {
-    std.debug.assert(instance.handle != .null_handle);
+    assert(instance.handle != .null_handle);
     if (settings.required_api_version) |version| {
         const wanted: u32 = @bitCast(version);
-        std.debug.assert(wanted >= minimum_supported_version_u32);
+        assert(wanted >= minimum_supported_version_u32);
     }
 
     const physical_device_handles = try instance.enumeratePhysicalDevicesAlloc(allocator);

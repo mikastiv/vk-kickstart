@@ -9,6 +9,8 @@ const Instance = vk.InstanceProxy;
 const log = @import("log.zig").vk_kickstart_log;
 const vk_log = @import("log.zig").vulkan_log;
 
+const assert = std.debug.assert;
+
 const validation_layers: []const [*:0]const u8 = &.{"VK_LAYER_KHRONOS_validation"};
 
 const default_message_severity: vk.DebugUtilsMessageSeverityFlagsEXT = .{
@@ -101,7 +103,7 @@ pub fn create(
 ) CreateError!Instance {
     if (settings.required_api_version) |version| {
         const wanted: u32 = @bitCast(version);
-        std.debug.assert(wanted >= minimum_supported_version_u32);
+        assert(wanted >= minimum_supported_version_u32);
     }
 
     dispatch.base_wrapper = vk.BaseWrapper.load(loader);
@@ -109,7 +111,7 @@ pub fn create(
     const instance_version_u32 = try dispatch.vkb().enumerateInstanceVersion();
     var instance_version: vk.Version = @bitCast(instance_version_u32);
 
-    std.debug.assert(instance_version_u32 >= minimum_supported_version_u32);
+    assert(instance_version_u32 >= minimum_supported_version_u32);
 
     if (settings.required_api_version) |req_version| {
         if (instance_version_u32 < @as(u32, @bitCast(req_version))) {
@@ -246,7 +248,7 @@ pub fn createDebugMessenger(
     settings: DebugMessengerSettings,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) !?vk.DebugUtilsMessengerEXT {
-    std.debug.assert(instance.handle != .null_handle);
+    assert(instance.handle != .null_handle);
 
     const debug_info = vk.DebugUtilsMessengerCreateInfoEXT{
         .message_severity = settings.message_severity,
@@ -265,8 +267,8 @@ pub fn destroyDebugMessenger(
     debug_messenger: ?vk.DebugUtilsMessengerEXT,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) void {
-    std.debug.assert(instance.handle != .null_handle);
-    std.debug.assert(debug_messenger != null);
+    assert(instance.handle != .null_handle);
+    assert(debug_messenger != null);
 
     instance.destroyDebugUtilsMessengerEXT(debug_messenger.?, allocation_callbacks);
 }

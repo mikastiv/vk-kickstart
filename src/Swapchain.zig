@@ -10,6 +10,8 @@ const Device = vk.DeviceProxy;
 
 const log = @import("log.zig").vk_kickstart_log;
 
+const assert = std.debug.assert;
+
 handle: vk.SwapchainKHR,
 device: Device,
 surface: vk.SurfaceKHR,
@@ -86,9 +88,9 @@ pub fn create(
     settings: CreateSettings,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) CreateError!Swapchain {
-    std.debug.assert(surface != .null_handle);
-    std.debug.assert(physical_device != .null_handle);
-    std.debug.assert(device.handle != .null_handle);
+    assert(surface != .null_handle);
+    assert(physical_device != .null_handle);
+    assert(device.handle != .null_handle);
 
     const capabilities = try instance.getPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface);
 
@@ -179,7 +181,7 @@ pub fn getImages(self: *const Swapchain, buffer: []vk.Image) GetImagesError!void
     var result = try self.device.getSwapchainImagesKHR(self.handle, &image_count, null);
     if (result != .success) return error.GetSwapchainImagesFailed;
 
-    std.debug.assert(image_count == buffer.len);
+    assert(image_count == buffer.len);
 
     while (true) {
         result = try self.device.getSwapchainImagesKHR(self.handle, &image_count, buffer.ptr);
@@ -198,7 +200,7 @@ pub fn getImageViews(
     buffer: []vk.ImageView,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) GetImageViewsError!void {
-    std.debug.assert(buffer.len == images.len);
+    assert(buffer.len == images.len);
 
     @memset(buffer, .null_handle);
     errdefer {
@@ -207,7 +209,7 @@ pub fn getImageViews(
         }
     }
 
-    for (images, 0..) |image, i| {
+    for (images, buffer) |image, *image_view| {
         const image_view_info = vk.ImageViewCreateInfo{
             .image = image,
             .view_type = .@"2d",
@@ -227,7 +229,7 @@ pub fn getImageViews(
             },
         };
 
-        buffer[i] = try self.device.createImageView(&image_view_info, allocation_callbacks);
+        image_view.* = try self.device.createImageView(&image_view_info, allocation_callbacks);
     }
 }
 
@@ -251,7 +253,7 @@ pub fn getImageViewsAlloc(
         allocator.free(image_views);
     }
 
-    for (images, 0..) |image, i| {
+    for (images, image_views) |image, *image_view| {
         const image_view_info = vk.ImageViewCreateInfo{
             .image = image,
             .view_type = .@"2d",
@@ -271,7 +273,7 @@ pub fn getImageViewsAlloc(
             },
         };
 
-        image_views[i] = try self.device.createImageView(&image_view_info, allocation_callbacks);
+        image_view.* = try self.device.createImageView(&image_view_info, allocation_callbacks);
     }
 
     return image_views;
