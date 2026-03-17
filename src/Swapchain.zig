@@ -33,7 +33,7 @@ pub const CreateSettings = struct {
     /// Swapchain create flags
     create_flags: vk.SwapchainCreateFlagsKHR = .{},
     /// Desired minimum number of presentable images that the application needs.
-    /// If left on default, will the minimum of the device.
+    /// If left on default, will use the minimum of the device.
     /// This value will be clamped between the device's minimum and maximum (if there is a max).
     desired_min_image_count: ?u32 = null,
     /// Array of desired image formats, in order of priority.
