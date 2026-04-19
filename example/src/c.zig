@@ -1,8 +1,4 @@
-const c = @cImport({
-    @cDefine("GLFW_INCLUDE_NONE", {});
-    @cInclude("GLFW/glfw3.h");
-});
-
+const c = @import("c");
 const vk = @import("vulkan");
 
 pub const GLFW_TRUE = c.GLFW_TRUE;

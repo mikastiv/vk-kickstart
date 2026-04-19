@@ -10,6 +10,13 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
+    const translate_c = b.addTranslateC(.{
+        .root_source_file = b.path("src/c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    translate_c.linkSystemLibrary("glfw", .{});
+
     const exe = b.addExecutable(.{
         .name = "kickstart_glfw_example",
         .root_module = b.createModule(.{
@@ -20,6 +27,7 @@ pub fn build(b: *std.Build) !void {
             .imports = &.{
                 .{ .name = "vk-kickstart", .module = vk_kickstart.module("vk-kickstart") },
                 .{ .name = "vulkan", .module = vk_kickstart.module("vulkan") },
+                .{ .name = "c", .module = translate_c.createModule() },
             },
         }),
     });

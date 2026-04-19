@@ -167,7 +167,7 @@ pub fn main() !void {
             window_data.framebuffer_resized = false;
         }
 
-        const result = try device.waitForFences(1, @ptrCast(&frame_sync[current_frame].in_flight_fence), .true, std.math.maxInt(u64));
+        const result = try device.waitForFences(&.{frame_sync[current_frame].in_flight_fence}, .true, std.math.maxInt(u64));
         std.debug.assert(result == .success);
 
         const next_image_result = device.acquireNextImageKHR(
@@ -232,10 +232,10 @@ fn drawFrame(
     };
 
     const fences = [_]vk.Fence{frame_sync.in_flight_fence};
-    try ctx.device.resetFences(fences.len, &fences);
+    try ctx.device.resetFences(&fences);
 
     const submits = [_]vk.SubmitInfo{submit_info};
-    try ctx.graphics_queue.submit(submits.len, &submits, frame_sync.in_flight_fence);
+    try ctx.graphics_queue.submit(&submits, frame_sync.in_flight_fence);
 
     const indices = [_]u32{image_index};
     const swapchains = [_]vk.SwapchainKHR{swapchain};
@@ -364,13 +364,13 @@ fn recordCommandBuffer(
         .min_depth = 0,
         .max_depth = 1,
     };
-    cmd.setViewport(0, 1, @ptrCast(&viewport));
+    cmd.setViewport(0, &.{viewport});
 
     const scissor = vk.Rect2D{
         .offset = .{ .x = 0, .y = 0 },
         .extent = extent,
     };
-    cmd.setScissor(0, 1, @ptrCast(&scissor));
+    cmd.setScissor(0, &.{scissor});
 
     cmd.bindPipeline(.graphics, pipeline);
 
@@ -504,10 +504,9 @@ fn createGraphicsPipeline(
     var graphics_pipeline: vk.Pipeline = .null_handle;
     const result = try device.createGraphicsPipelines(
         .null_handle,
-        1,
-        @ptrCast(&pipeline_info),
+        &.{pipeline_info},
         null,
-        @ptrCast(&graphics_pipeline),
+        (&graphics_pipeline)[0..1],
     );
     errdefer device.destroyPipeline(graphics_pipeline, null);
 

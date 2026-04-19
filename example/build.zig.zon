@@ -1,7 +1,7 @@
 .{
     .name = .kickstart_glfw_example,
     .version = "0.0.0",
-    .minimum_zig_version = "0.15.1",
+    .minimum_zig_version = "0.16.0",
     .fingerprint = 0x133522ddf1ea8fde,
     .dependencies = .{
         .vk_kickstart = .{

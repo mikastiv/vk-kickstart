@@ -11,7 +11,7 @@
     };
 
     zls = {
-      url = "github:zigtools/zls/ce6c8f02c78e622421cfc2405c67c5222819ec03";
+      url = "github:zigtools/zls/494486203c3a48927f2383aa3d5ce5fca112186d";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -32,7 +32,7 @@
       {
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
-            zig.packages.${system}."0.15.2"
+            zig.packages.${system}."0.16.0"
             zls.packages.${system}.zls
             glfw
             vulkan-loader
