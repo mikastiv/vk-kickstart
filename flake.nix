@@ -3,47 +3,43 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
 
-    zig = {
-      url = "github:mitchellh/zig-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    zls = {
-      url = "github:zigtools/zls/494486203c3a48927f2383aa3d5ce5fca112186d";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    zig-flake.url = "github:silversquirl/zig-flake";
+    zig-flake.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      zig,
-      zls,
-      flake-utils,
+      zig-flake,
     }:
-    flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = import nixpkgs { inherit system; };
-      in
-      {
-        devShells.default = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [
-            zig.packages.${system}."0.16.0"
-            zls.packages.${system}.zls
-            glfw
-            vulkan-loader
-            vulkan-headers
-            vulkan-tools
-            vulkan-validation-layers
-            vulkan-tools-lunarg
-            shaderc
-            lldb
-          ];
-        };
-      }
-    );
+    let
+      forAllSystems =
+        f:
+        builtins.mapAttrs (
+          system: pkgs: f pkgs zig-flake.packages.${system}.zig_0_16_0
+        ) nixpkgs.legacyPackages;
+    in
+    {
+      devShells = forAllSystems (
+        pkgs: zig: {
+          default = pkgs.mkShell {
+            nativeBuildInputs = with pkgs; [
+              zig
+              zig.zls
+              vulkan-loader
+              vulkan-headers
+              vulkan-tools
+              vulkan-validation-layers
+              vulkan-tools-lunarg
+              glfw
+              shaderc
+              lldb
+            ];
+          };
+        }
+      );
+
+    };
 }
