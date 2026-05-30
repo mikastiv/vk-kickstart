@@ -54,8 +54,13 @@ pub const SelectSettings = struct {
     /// Minimum Vulkan version. If required version and minimum version are not set, the latest
     /// version available is selected.
     minimum_api_version: ?vk.Version = null,
-    /// Prefered physical device type.
-    preferred_type: vk.PhysicalDeviceType = .discrete_gpu,
+    /// Prefered physical device types, in order of preference.
+    preferred_types: []const vk.PhysicalDeviceType = &[_]vk.PhysicalDeviceType{
+        .discrete_gpu,
+        .integrated_gpu,
+        .virtual_gpu,
+        .cpu,
+    },
     /// Transfer queue preference.
     transfer_queue: QueuePreference = .none,
     /// Compute queue preference.
@@ -343,15 +348,21 @@ fn getQueueNoGraphics(
     return index;
 }
 
+// Returns whether device A is preferred over device B
 fn comparePhysicalDevices(settings: SelectSettings, a: PhysicalDeviceInfo, b: PhysicalDeviceInfo) bool {
     if (a.suitable != b.suitable) {
         return a.suitable;
     }
 
-    const a_is_prefered_type = a.properties.device_type == settings.preferred_type;
-    const b_is_prefered_type = b.properties.device_type == settings.preferred_type;
-    if (a_is_prefered_type != b_is_prefered_type) {
-        return a_is_prefered_type;
+    if (settings.preferred_types.len > 0) {
+        const rank_a = getDeviceTypeRank(settings.preferred_types, a.properties.device_type);
+        const rank_b = getDeviceTypeRank(settings.preferred_types, b.properties.device_type);
+
+        if (rank_a != null and rank_b != null) {
+            if (rank_a.? != rank_b.?) return rank_a.? < rank_b.?;
+        }
+        if (rank_a != null and rank_b == null) return true;
+        if (rank_a == null and rank_b != null) return false;
     }
 
     const local_memory_a = getLocalMemorySize(&a.memory_properties);
@@ -365,6 +376,16 @@ fn comparePhysicalDevices(settings: SelectSettings, a: PhysicalDeviceInfo, b: Ph
     }
 
     return true;
+}
+
+// The index in the list of vk.PhysicalDeviceType represents the rank, with a
+// lower index being a higher preference, e.g. a higher rank.
+fn getDeviceTypeRank(preferred_types: []const vk.PhysicalDeviceType, device_type: vk.PhysicalDeviceType) ?usize {
+    for (preferred_types, 0..) |p_type, index| {
+        if (p_type == device_type) return index;
+    }
+
+    return null;
 }
 
 fn getLocalMemorySize(memory_properties: *const vk.PhysicalDeviceMemoryProperties) vk.DeviceSize {
