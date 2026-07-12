@@ -14,13 +14,13 @@ const assert = std.debug.assert;
 const validation_layers: []const [*:0]const u8 = &.{"VK_LAYER_KHRONOS_validation"};
 
 const default_message_severity: vk.DebugUtilsMessageSeverityFlagsEXT = .{
-    .warning_bit_ext = true,
-    .error_bit_ext = true,
+    .warning_ext = true,
+    .error_ext = true,
 };
 const default_message_type: vk.DebugUtilsMessageTypeFlagsEXT = .{
-    .general_bit_ext = true,
-    .validation_bit_ext = true,
-    .performance_bit_ext = true,
+    .general_ext = true,
+    .validation_ext = true,
+    .performance_ext = true,
 };
 
 pub const minimum_supported_version = vk.API_VERSION_1_1;
@@ -194,7 +194,7 @@ pub fn create(
     }
 
     const instance_info = vk.InstanceCreateInfo{
-        .flags = if (portability_enumeration_support) .{ .enumerate_portability_bit_khr = true } else .{},
+        .flags = if (portability_enumeration_support) .{ .enumerate_portability_khr = true } else .{},
         .p_application_info = &app_info,
         .enabled_extension_count = @as(u32, @intCast(required_extensions.len)),
         .pp_enabled_extension_names = required_extensions.ptr,
@@ -285,26 +285,26 @@ fn defaultDebugMessageCallback(
     _: ?*anyopaque,
 ) callconv(vk.vulkan_call_conv) vk.Bool32 {
     if (p_callback_data) |data| {
-        if (severity.error_bit_ext) {
-            if (msg_type.validation_bit_ext) {
+        if (severity.error_ext) {
+            if (msg_type.validation_ext) {
                 vk_log.err("{?s}\n{?s}", .{ data.p_message_id_name, data.p_message });
             } else {
                 vk_log.err("{?s}", .{data.p_message});
             }
-        } else if (severity.warning_bit_ext) {
-            if (msg_type.validation_bit_ext) {
+        } else if (severity.warning_ext) {
+            if (msg_type.validation_ext) {
                 vk_log.warn("{?s}\n{?s}", .{ data.p_message_id_name, data.p_message });
             } else {
                 vk_log.warn("{?s}", .{data.p_message});
             }
-        } else if (severity.info_bit_ext) {
-            if (msg_type.validation_bit_ext) {
+        } else if (severity.info_ext) {
+            if (msg_type.validation_ext) {
                 vk_log.info("{?s}\n{?s}", .{ data.p_message_id_name, data.p_message });
             } else {
                 vk_log.info("{?s}", .{data.p_message});
             }
         } else {
-            if (msg_type.validation_bit_ext) {
+            if (msg_type.validation_ext) {
                 vk_log.debug("{?s}\n{?s}", .{ data.p_message_id_name, data.p_message });
             } else {
                 vk_log.debug("{?s}", .{data.p_message});

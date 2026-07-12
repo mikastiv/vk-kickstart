@@ -218,7 +218,7 @@ fn drawFrame(
     image_index: u32,
 ) !bool {
     const wait_semaphores = [_]vk.Semaphore{frame_sync.image_available_semaphore};
-    const wait_stages = [_]vk.PipelineStageFlags{.{ .color_attachment_output_bit = true }};
+    const wait_stages = [_]vk.PipelineStageFlags{.{ .color_attachment_output = true }};
     const signal_semaphores = [_]vk.Semaphore{image_sync.render_finished_semaphore};
     const command_buffers = [_]vk.CommandBuffer{command_buffer};
     const submit_info = vk.SubmitInfo{
@@ -401,7 +401,7 @@ fn createCommandBuffers(
 
 fn createCommandPool(device: Device, queue_family_index: u32) !vk.CommandPool {
     const create_info = vk.CommandPoolCreateInfo{
-        .flags = .{ .reset_command_buffer_bit = true },
+        .flags = .{ .reset_command_buffer = true },
         .queue_family_index = queue_family_index,
     };
     return device.createCommandPool(&create_info, null);
@@ -416,12 +416,12 @@ fn createGraphicsPipeline(
 ) !vk.Pipeline {
     const shader_stages = [2]vk.PipelineShaderStageCreateInfo{
         .{
-            .stage = .{ .vertex_bit = true },
+            .stage = .{ .vertex = true },
             .module = vertex_shader,
             .p_name = "main",
         },
         .{
-            .stage = .{ .fragment_bit = true },
+            .stage = .{ .fragment = true },
             .module = fragment_shader,
             .p_name = "main",
         },
@@ -450,7 +450,7 @@ fn createGraphicsPipeline(
         .rasterizer_discard_enable = .false,
         .polygon_mode = .fill,
         .line_width = 1,
-        .cull_mode = .{ .back_bit = true },
+        .cull_mode = .{ .back = true },
         .front_face = .clockwise,
         .depth_bias_enable = .false,
         .depth_bias_constant_factor = 0,
@@ -459,7 +459,7 @@ fn createGraphicsPipeline(
     };
 
     const multisampling_info = vk.PipelineMultisampleStateCreateInfo{
-        .rasterization_samples = .{ .@"1_bit" = true },
+        .rasterization_samples = .{ .@"1" = true },
         .sample_shading_enable = .false,
         .min_sample_shading = 1,
         .alpha_to_coverage_enable = .false,
@@ -474,7 +474,7 @@ fn createGraphicsPipeline(
         .src_alpha_blend_factor = .one,
         .dst_alpha_blend_factor = .zero,
         .alpha_blend_op = .add,
-        .color_write_mask = .{ .r_bit = true, .g_bit = true, .b_bit = true, .a_bit = true },
+        .color_write_mask = .{ .r = true, .g = true, .b = true, .a = true },
     }};
 
     const color_blend_info = vk.PipelineColorBlendStateCreateInfo{
@@ -557,7 +557,7 @@ fn createFrameSyncObjects(device: Device) ![max_frames_in_flight]FrameSyncObject
     }
 
     const semaphore_info = vk.SemaphoreCreateInfo{};
-    const fence_info = vk.FenceCreateInfo{ .flags = .{ .signaled_bit = true } };
+    const fence_info = vk.FenceCreateInfo{ .flags = .{ .signaled = true } };
     for (0..objects.len) |i| {
         objects[i].image_available_semaphore = try device.createSemaphore(&semaphore_info, null);
         objects[i].in_flight_fence = try device.createFence(&fence_info, null);
@@ -599,7 +599,7 @@ fn createFramebuffers(
 fn createRenderPass(device: Device, image_format: vk.Format) !vk.RenderPass {
     const color_attachment = vk.AttachmentDescription{
         .format = image_format,
-        .samples = .{ .@"1_bit" = true },
+        .samples = .{ .@"1" = true },
         .load_op = .clear,
         .store_op = .store,
         .stencil_load_op = .dont_care,
@@ -622,10 +622,10 @@ fn createRenderPass(device: Device, image_format: vk.Format) !vk.RenderPass {
     const dependencies = [_]vk.SubpassDependency{.{
         .src_subpass = vk.SUBPASS_EXTERNAL,
         .dst_subpass = 0,
-        .src_stage_mask = .{ .color_attachment_output_bit = true, .early_fragment_tests_bit = true },
+        .src_stage_mask = .{ .color_attachment_output = true, .early_fragment_tests = true },
         .src_access_mask = .{},
-        .dst_stage_mask = .{ .color_attachment_output_bit = true, .early_fragment_tests_bit = true },
-        .dst_access_mask = .{ .color_attachment_write_bit = true },
+        .dst_stage_mask = .{ .color_attachment_output = true, .early_fragment_tests = true },
+        .dst_access_mask = .{ .color_attachment_write = true },
     }};
 
     const attachments = [_]vk.AttachmentDescription{color_attachment};
