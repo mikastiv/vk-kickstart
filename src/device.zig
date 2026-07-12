@@ -124,9 +124,11 @@ pub fn destroy(device: Device, allocator: Allocator, allocation_callbacks: ?*con
 fn printEnabledFeatures(comptime T: type, features: T) void {
     const info = @typeInfo(T);
     if (info != .@"struct") @compileError("must be a struct");
-    inline for (info.@"struct".fields) |field| {
-        if (field.type == vk.Bool32 and @field(features, field.name) == .true) {
-            log.debug(" - {s}", .{field.name});
+    const field_names = comptime std.meta.fieldNames(T);
+    const field_types = comptime std.meta.fieldTypes(T);
+    inline for (field_names, field_types) |field_name, field_type| {
+        if (field_type == vk.Bool32 and @field(features, field_name) == .true) {
+            log.debug(" - {s}", .{field_name});
         }
     }
 }

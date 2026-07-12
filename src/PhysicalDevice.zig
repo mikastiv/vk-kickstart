@@ -256,9 +256,11 @@ pub fn name(self: *const PhysicalDevice) []const u8 {
 fn printAvailableFeatures(comptime T: type, features: T) void {
     const info = @typeInfo(T);
     if (info != .@"struct") @compileError("must be a struct");
-    inline for (info.@"struct".fields) |field| {
-        if (field.type == vk.Bool32) {
-            log.debug(" - {s}: {s}", .{ field.name, if (@field(features, field.name) != .false) "yes" else "no" });
+    const field_names = comptime std.meta.fieldNames(T);
+    const field_types = comptime std.meta.fieldTypes(T);
+    inline for (field_names, field_types) |field_name, field_type| {
+        if (field_type == vk.Bool32) {
+            log.debug(" - {s}: {s}", .{ field_name, if (@field(features, field_name) != .false) "yes" else "no" });
         }
     }
 }
