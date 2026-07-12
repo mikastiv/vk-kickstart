@@ -336,7 +336,7 @@ fn getQueueNoGraphics(
 ) ?u32 {
     var index: ?u32 = null;
     for (families, 0..) |family, i| {
-        if (family.queue_count == 0 or family.queue_flags.graphics_bit) continue;
+        if (family.queue_count == 0 or family.queue_flags.graphics) continue;
 
         const idx: u32 = @intCast(i);
 
@@ -394,7 +394,7 @@ fn getLocalMemorySize(memory_properties: *const vk.PhysicalDeviceMemoryPropertie
     var size: vk.DeviceSize = 0;
     const heap_count = memory_properties.memory_heap_count;
     for (memory_properties.memory_heaps[0..heap_count]) |heap| {
-        if (heap.flags.device_local_bit) {
+        if (heap.flags.device_local) {
             // NOTE: take the sum instead to account for small local fast heap?
             size = @max(size, heap.size);
         }
@@ -482,7 +482,7 @@ fn isDeviceSuitable(
 
     const heap_count = device.memory_properties.memory_heap_count;
     for (device.memory_properties.memory_heaps[0..heap_count]) |heap| {
-        if (heap.flags.device_local_bit and heap.size >= settings.required_mem_size) {
+        if (heap.flags.device_local and heap.size >= settings.required_mem_size) {
             break;
         }
     } else {
@@ -549,26 +549,26 @@ fn getPhysicalDeviceInfo(
     const queue_families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(handle, allocator);
     errdefer allocator.free(queue_families);
 
-    const graphics_queue_index = getQueueStrict(queue_families, .{ .graphics_bit = true }, .{});
+    const graphics_queue_index = getQueueStrict(queue_families, .{ .graphics = true }, .{});
     const dedicated_transfer = getQueueStrict(
         queue_families,
-        .{ .transfer_bit = true },
-        .{ .graphics_bit = true, .compute_bit = true },
+        .{ .transfer = true },
+        .{ .graphics = true, .compute = true },
     );
     const dedicated_compute = getQueueStrict(
         queue_families,
-        .{ .compute_bit = true },
-        .{ .graphics_bit = true, .transfer_bit = true },
+        .{ .compute = true },
+        .{ .graphics = true, .transfer = true },
     );
     const separate_transfer = getQueueNoGraphics(
         queue_families,
-        .{ .transfer_bit = true },
-        .{ .compute_bit = true },
+        .{ .transfer = true },
+        .{ .compute = true },
     );
     const separate_compute = getQueueNoGraphics(
         queue_families,
-        .{ .compute_bit = true },
-        .{ .transfer_bit = true },
+        .{ .compute = true },
+        .{ .transfer = true },
     );
     const present_queue_index = switch (surface) {
         .null_handle => null,

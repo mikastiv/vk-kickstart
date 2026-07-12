@@ -50,11 +50,11 @@ pub const CreateSettings = struct {
     /// Will be clamped down if higher than device's max
     desired_array_layer_count: u32 = 1,
     /// Intended usage of the (acquired) swapchain images
-    image_usage_flags: vk.ImageUsageFlags = .{ .color_attachment_bit = true },
+    image_usage_flags: vk.ImageUsageFlags = .{ .color_attachment = true },
     /// Value describing the transform, relative to the presentation engine’s natural orientation, applied to the image content prior to presentation
     pre_transform: ?vk.SurfaceTransformFlagsKHR = null,
     /// Value indicating the alpha compositing mode to use when this surface is composited together with other surfaces on certain window systems
-    composite_alpha: vk.CompositeAlphaFlagsKHR = .{ .opaque_bit_khr = true },
+    composite_alpha: vk.CompositeAlphaFlagsKHR = .{ .opaque_khr = true },
     /// Discard rendering operation that are not visible
     clipped: vk.Bool32 = .true,
     /// Existing non-retired swapchain currently associated with surface
@@ -220,7 +220,7 @@ pub fn getImageViews(
                 .a = .identity,
             },
             .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
+                .aspect_mask = .{ .color = true },
                 .base_mip_level = 0,
                 .level_count = 1,
                 .base_array_layer = 0,
@@ -264,7 +264,7 @@ pub fn getImageViewsAlloc(
                 .a = .identity,
             },
             .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
+                .aspect_mask = .{ .color = true },
                 .base_mip_level = 0,
                 .level_count = 1,
                 .base_array_layer = 0,
