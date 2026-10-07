@@ -2,7 +2,7 @@
   description = "zig flake";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
     zig-flake.url = "github:silversquirl/zig-flake";
     zig-flake.inputs.nixpkgs.follows = "nixpkgs";
@@ -18,7 +18,7 @@
       forAllSystems =
         f:
         builtins.mapAttrs (
-          system: pkgs: f pkgs zig-flake.packages.${system}.zig_0_16_0
+          system: pkgs: f pkgs zig-flake.packages.${system}.zig_0_17_0
         ) nixpkgs.legacyPackages;
     in
     {
@@ -42,7 +42,7 @@
               glsl_analyzer
               shaderc
               zig
-              zig.zls
+              # zig.zls
             ];
 
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (runtimeLibs);

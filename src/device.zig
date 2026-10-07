@@ -27,8 +27,6 @@ pub fn create(
     p_next_chain: ?*anyopaque,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) CreateError!Device {
-    assert(physical_device.handle != .null_handle);
-
     const queue_create_infos = try createQueueInfos(allocator, physical_device);
     defer allocator.free(queue_create_infos);
 
@@ -122,11 +120,10 @@ pub fn destroy(device: Device, allocator: Allocator, allocation_callbacks: ?*con
 }
 
 fn printEnabledFeatures(comptime T: type, features: T) void {
-    const info = @typeInfo(T);
-    if (info != .@"struct") @compileError("must be a struct");
-    inline for (info.@"struct".fields) |field| {
-        if (field.type == vk.Bool32 and @field(features, field.name) == .true) {
-            log.debug(" - {s}", .{field.name});
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_names, info.field_types) |field_name, field_type| {
+        if (field_type == vk.Bool32 and @field(features, field_name) == .true) {
+            log.debug(" - {s}", .{field_name});
         }
     }
 }

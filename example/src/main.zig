@@ -59,7 +59,7 @@ const Swapchain = struct {
     }
 };
 
-const debug_mode = builtin.mode == .Debug;
+const debug_mode = builtin.mode == .debug;
 
 fn logSdlError() void {
     sdl_log.err("{s}", .{sdl.SDL_GetError()});
@@ -136,7 +136,7 @@ pub fn main(init: std.process.Init) !void {
     var surface: vk.SurfaceKHR = .null_handle;
     if (!sdl.SDL_Vulkan_CreateSurface(
         window,
-        @ptrFromInt(@intFromEnum(instance.handle)),
+        @ptrCast(instance.handle),
         null,
         @ptrCast(&surface),
     )) {
@@ -171,7 +171,7 @@ pub fn main(init: std.process.Init) !void {
 
     const vulkan_functions = vma.initVulkanFunctions(loader, instance, device);
     const allocator_ci: vma.AllocatorCreateInfo = .{
-        .flags = .{ .buffer_device_address_bit = true },
+        .flags = .{ .buffer_device_address = true },
         .instance = instance.handle,
         .physical_device = physical_device.handle,
         .device = device.handle,
@@ -240,7 +240,7 @@ pub fn main(init: std.process.Init) !void {
     defer device.destroySemaphore(timeline_semaphore, null);
 
     const frame_resources = try createFrameResources(device, physical_device.graphics_queue_family_index);
-    defer destroyFrameResources(device, frame_resources);
+    defer destroyFrameResources(device, &frame_resources);
 
     var frame_index: u32 = 0;
     var next_signal_value: u64 = max_frames_in_flight + 1;
@@ -392,7 +392,7 @@ fn submitCommandBuffer(
     const image_acquire_si: vk.SemaphoreSubmitInfo = .{
         .semaphore = image_acquire_semaphore,
         .value = 0,
-        .stage_mask = .{ .color_attachment_output_bit = true },
+        .stage_mask = .{ .color_attachment_output = true },
         .device_index = 0,
     };
 
@@ -400,13 +400,13 @@ fn submitCommandBuffer(
         .{
             .semaphore = render_semaphore,
             .value = 0,
-            .stage_mask = .{ .all_graphics_bit = true },
+            .stage_mask = .{ .all_graphics = true },
             .device_index = 0,
         },
         .{
             .semaphore = timeline_semaphore,
             .value = signal_value,
-            .stage_mask = .{ .all_commands_bit = true },
+            .stage_mask = .{ .all_commands = true },
             .device_index = 0,
         },
     };
@@ -474,14 +474,14 @@ fn createSwapchain(
         .extent = .{ .width = swapchain.extent.width, .height = swapchain.extent.height, .depth = 1 },
         .mip_levels = 1,
         .array_layers = 1,
-        .samples = .{ .@"1_bit" = true },
+        .samples = .{ .@"1" = true },
         .tiling = .optimal,
-        .usage = .{ .depth_stencil_attachment_bit = true },
+        .usage = .{ .depth_stencil_attachment = true },
         .initial_layout = .undefined,
         .sharing_mode = .exclusive,
     };
     const depth_image_alloc_ci: vma.AllocationCreateInfo = .{
-        .flags = .{ .dedicated_memory_bit = true },
+        .flags = .{ .dedicated_memory = true },
         .usage = .auto,
         .memory_type_bits = 0,
         .priority = 0,
@@ -499,7 +499,7 @@ fn createSwapchain(
         .view_type = .@"2d",
         .format = depth_format,
         .subresource_range = .{
-            .aspect_mask = .{ .depth_bit = true },
+            .aspect_mask = .{ .depth = true },
             .level_count = 1,
             .layer_count = 1,
             .base_array_layer = 0,
@@ -533,20 +533,20 @@ fn recordCommandBuffer(
     const image = swapchain.images[image_index];
     const image_view = swapchain.image_views[image_index];
 
-    const cb_begin_info: vk.CommandBufferBeginInfo = .{ .flags = .{ .one_time_submit_bit = true } };
+    const cb_begin_info: vk.CommandBufferBeginInfo = .{ .flags = .{ .one_time_submit = true } };
     try cb.beginCommandBuffer(&cb_begin_info);
 
     const output_barriers = [_]vk.ImageMemoryBarrier2{
         .{
-            .src_stage_mask = .{ .color_attachment_output_bit = true },
+            .src_stage_mask = .{ .color_attachment_output = true },
             .src_access_mask = .{},
-            .dst_stage_mask = .{ .color_attachment_output_bit = true },
-            .dst_access_mask = .{ .color_attachment_write_bit = true },
+            .dst_stage_mask = .{ .color_attachment_output = true },
+            .dst_access_mask = .{ .color_attachment_write = true },
             .old_layout = .undefined,
             .new_layout = .attachment_optimal,
             .image = image,
             .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
+                .aspect_mask = .{ .color = true },
                 .level_count = 1,
                 .layer_count = 1,
                 .base_array_layer = 0,
@@ -556,15 +556,15 @@ fn recordCommandBuffer(
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
         },
         .{
-            .src_stage_mask = .{ .early_fragment_tests_bit = true },
+            .src_stage_mask = .{ .early_fragment_tests = true },
             .src_access_mask = .{},
-            .dst_stage_mask = .{ .early_fragment_tests_bit = true, .late_fragment_tests_bit = true },
-            .dst_access_mask = .{ .depth_stencil_attachment_write_bit = true },
+            .dst_stage_mask = .{ .early_fragment_tests = true, .late_fragment_tests = true },
+            .dst_access_mask = .{ .depth_stencil_attachment_write = true },
             .old_layout = .undefined,
             .new_layout = .attachment_optimal,
             .image = swapchain.depth_image,
             .subresource_range = .{
-                .aspect_mask = .{ .depth_bit = true },
+                .aspect_mask = .{ .depth = true },
                 .level_count = 1,
                 .layer_count = 1,
                 .base_array_layer = 0,
@@ -637,15 +637,15 @@ fn recordCommandBuffer(
     cb.endRendering();
 
     const barrier_present: vk.ImageMemoryBarrier2 = .{
-        .src_stage_mask = .{ .color_attachment_output_bit = true },
-        .src_access_mask = .{ .color_attachment_write_bit = true },
+        .src_stage_mask = .{ .color_attachment_output = true },
+        .src_access_mask = .{ .color_attachment_write = true },
         .dst_stage_mask = .{},
         .dst_access_mask = .{},
         .old_layout = .color_attachment_optimal,
         .new_layout = .present_src_khr,
         .image = image,
         .subresource_range = .{
-            .aspect_mask = .{ .color_bit = true },
+            .aspect_mask = .{ .color = true },
             .level_count = 1,
             .layer_count = 1,
             .base_array_layer = 0,
@@ -673,12 +673,12 @@ fn createGraphicsPipeline(
 ) !vk.Pipeline {
     const shader_stages = [_]vk.PipelineShaderStageCreateInfo{
         .{
-            .stage = .{ .vertex_bit = true },
+            .stage = .{ .vertex = true },
             .module = vertex_shader,
             .p_name = "main",
         },
         .{
-            .stage = .{ .fragment_bit = true },
+            .stage = .{ .fragment = true },
             .module = fragment_shader,
             .p_name = "main",
         },
@@ -729,7 +729,7 @@ fn createGraphicsPipeline(
         .rasterizer_discard_enable = .false,
         .polygon_mode = .fill,
         .line_width = 1.0,
-        .cull_mode = .{ .back_bit = true },
+        .cull_mode = .{ .back = true },
         .front_face = .counter_clockwise,
         .depth_bias_enable = .false,
         .depth_bias_constant_factor = 0.0,
@@ -738,7 +738,7 @@ fn createGraphicsPipeline(
     };
 
     const multisample_ci: vk.PipelineMultisampleStateCreateInfo = .{
-        .rasterization_samples = .{ .@"1_bit" = true },
+        .rasterization_samples = .{ .@"1" = true },
         .sample_shading_enable = .false,
         .min_sample_shading = 0.0,
         .alpha_to_coverage_enable = .false,
@@ -753,7 +753,7 @@ fn createGraphicsPipeline(
         .src_alpha_blend_factor = .zero,
         .dst_alpha_blend_factor = .zero,
         .alpha_blend_op = .add,
-        .color_write_mask = .{ .r_bit = true, .g_bit = true, .b_bit = true, .a_bit = true },
+        .color_write_mask = .{ .r = true, .g = true, .b = true, .a = true },
     }};
 
     const color_blend_ci: vk.PipelineColorBlendStateCreateInfo = .{
@@ -841,7 +841,7 @@ fn createFrameResources(device: Device, queue_family_index: u32) ![max_frames_in
             .command_pool = objects[i].command_pool,
             .level = .primary,
         };
-        var command_buffer: vk.CommandBuffer = .null_handle;
+        var command_buffer: vk.CommandBuffer = undefined;
         try device.allocateCommandBuffers(&command_buffer_ai, @ptrCast(&command_buffer));
 
         objects[i].command_buffer = .init(command_buffer, device.wrapper);
@@ -851,7 +851,7 @@ fn createFrameResources(device: Device, queue_family_index: u32) ![max_frames_in
     return objects;
 }
 
-fn destroyFrameResources(device: Device, objects: [max_frames_in_flight]FrameResource) void {
+fn destroyFrameResources(device: Device, objects: *const [max_frames_in_flight]FrameResource) void {
     for (objects) |object| {
         device.destroyCommandPool(object.command_pool, null);
         device.destroySemaphore(object.image_acquire_semaphore, null);

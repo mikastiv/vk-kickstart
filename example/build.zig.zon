@@ -12,8 +12,8 @@
             .hash = "sdl-1.0.3+3.4.16-i4QD0VwGqgDmmhfOmpwPL3MnU2bKAwYkLxFO3NvpBw4w",
         },
         .vma_zig = .{
-            .url = "git+https://github.com/mikastiv/vma-zig#ce1c46ea24230e2667a9a898362d914d37dc1512",
-            .hash = "vma_zig-0.1.0-AoJBtlruAABSEmrT6CxoAvpR75PHUzkBb8owoHHsTL41",
+            .url = "git+https://codeberg.org/mikastiv/vma-zig#1c430e7c906b927b46b47bf2ae7982cb72f27d24",
+            .hash = "vma_zig-0.1.0-AoJBthrrAABCit8VOpic5OEHTrWd6FvdEhyKaPGy_0jo",
         },
     },
     .paths = .{
