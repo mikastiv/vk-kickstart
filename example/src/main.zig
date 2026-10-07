@@ -169,15 +169,13 @@ pub fn main(init: std.process.Init) !void {
     const gfx_queue_handle = device.getDeviceQueue(physical_device.graphics_queue_family_index, 0);
     const gfx_queue: Queue = .init(gfx_queue_handle, device.wrapper);
 
+    const vulkan_functions = vma.initVulkanFunctions(loader, instance, device);
     const allocator_ci: vma.AllocatorCreateInfo = .{
         .flags = .{ .buffer_device_address_bit = true },
         .instance = instance.handle,
         .physical_device = physical_device.handle,
         .device = device.handle,
-        .p_vulkan_functions = &.{
-            .getInstanceProcAddr = @ptrCast(loader),
-            .getDeviceProcAddr = @ptrCast(instance.wrapper.dispatch.vkGetDeviceProcAddr),
-        },
+        .p_vulkan_functions = &vulkan_functions,
         .vulkan_api_version = physical_device.properties.api_version,
     };
     const vma_allocator = try vma.Allocator.create(&allocator_ci);
