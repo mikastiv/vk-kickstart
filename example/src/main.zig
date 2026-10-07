@@ -346,40 +346,14 @@ pub fn main(init: std.process.Init) !void {
         const cb = frame_resource.command_buffer;
 
         try recordCommandBuffer(cb, &swapchain, image_index, pipeline);
-
-        const image_acquire_si: vk.SemaphoreSubmitInfo = .{
-            .semaphore = frame_resource.image_acquire_semaphore,
-            .value = 0,
-            .stage_mask = .{ .color_attachment_output_bit = true },
-            .device_index = 0,
-        };
-        const semaphore_signals = [_]vk.SemaphoreSubmitInfo{
-            .{
-                .semaphore = render_semaphores[image_index],
-                .value = 0,
-                .stage_mask = .{ .all_graphics_bit = true },
-                .device_index = 0,
-            },
-            .{
-                .semaphore = timeline_semaphore,
-                .value = signal_value,
-                .stage_mask = .{ .all_commands_bit = true },
-                .device_index = 0,
-            },
-        };
-        const cb_submit_info: vk.CommandBufferSubmitInfo = .{
-            .command_buffer = cb.handle,
-            .device_mask = 0,
-        };
-        const submit_info: vk.SubmitInfo2 = .{
-            .wait_semaphore_info_count = 1,
-            .p_wait_semaphore_infos = @ptrCast(&image_acquire_si),
-            .command_buffer_info_count = 1,
-            .p_command_buffer_infos = @ptrCast(&cb_submit_info),
-            .signal_semaphore_info_count = semaphore_signals.len,
-            .p_signal_semaphore_infos = &semaphore_signals,
-        };
-        try gfx_queue.submit2(@ptrCast(&submit_info), .null_handle);
+        try submitCommandBuffer(
+            gfx_queue,
+            cb.handle,
+            frame_resource.image_acquire_semaphore,
+            render_semaphores[image_index],
+            timeline_semaphore,
+            signal_value,
+        );
 
         next_signal_value += 1;
 
@@ -405,6 +379,52 @@ pub fn main(init: std.process.Init) !void {
     }
 
     try device.deviceWaitIdle();
+}
+
+fn submitCommandBuffer(
+    queue: Queue,
+    command_buffer: vk.CommandBuffer,
+    image_acquire_semaphore: vk.Semaphore,
+    render_semaphore: vk.Semaphore,
+    timeline_semaphore: vk.Semaphore,
+    signal_value: u64,
+) !void {
+    const image_acquire_si: vk.SemaphoreSubmitInfo = .{
+        .semaphore = image_acquire_semaphore,
+        .value = 0,
+        .stage_mask = .{ .color_attachment_output_bit = true },
+        .device_index = 0,
+    };
+
+    const semaphore_signals = [_]vk.SemaphoreSubmitInfo{
+        .{
+            .semaphore = render_semaphore,
+            .value = 0,
+            .stage_mask = .{ .all_graphics_bit = true },
+            .device_index = 0,
+        },
+        .{
+            .semaphore = timeline_semaphore,
+            .value = signal_value,
+            .stage_mask = .{ .all_commands_bit = true },
+            .device_index = 0,
+        },
+    };
+
+    const cb_submit_info: vk.CommandBufferSubmitInfo = .{
+        .command_buffer = command_buffer,
+        .device_mask = 0,
+    };
+
+    const submit_info: vk.SubmitInfo2 = .{
+        .wait_semaphore_info_count = 1,
+        .p_wait_semaphore_infos = @ptrCast(&image_acquire_si),
+        .command_buffer_info_count = 1,
+        .p_command_buffer_infos = @ptrCast(&cb_submit_info),
+        .signal_semaphore_info_count = semaphore_signals.len,
+        .p_signal_semaphore_infos = &semaphore_signals,
+    };
+    try queue.submit2(@ptrCast(&submit_info), .null_handle);
 }
 
 fn createSwapchain(
