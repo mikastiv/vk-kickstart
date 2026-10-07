@@ -13,7 +13,6 @@ const log = @import("log.zig").vk_kickstart_log;
 const assert = std.debug.assert;
 
 handle: vk.SwapchainKHR,
-device: Device,
 surface: vk.SurfaceKHR,
 image_count: u32,
 image_format: vk.Format,
@@ -21,12 +20,14 @@ image_usage: vk.ImageUsageFlags,
 color_space: vk.ColorSpaceKHR,
 extent: vk.Extent2D,
 present_mode: vk.PresentModeKHR,
+graphics_queue_family_index: u32,
+present_queue_family_index: u32,
 
 pub const CreateSettings = struct {
-    /// Graphics queue index
-    graphics_queue_index: u32,
-    /// Present queue index
-    present_queue_index: u32,
+    /// Graphics queue family index
+    graphics_queue_family_index: u32,
+    /// Present queue family index
+    present_queue_family_index: u32,
     /// Desired size (in pixels) of the swapchain image(s).
     /// These values will be clamped within the capabilities of the device
     desired_extent: vk.Extent2D,
@@ -118,8 +119,8 @@ pub fn create(
             return error.UsageFlagsNotSupported;
     }
 
-    const same_index = settings.graphics_queue_index == settings.present_queue_index;
-    const queue_family_indices = [_]u32{ settings.graphics_queue_index, settings.present_queue_index };
+    const same_index = settings.graphics_queue_family_index == settings.present_queue_family_index;
+    const queue_family_indices = [_]u32{ settings.graphics_queue_family_index, settings.present_queue_family_index };
 
     const swapchain_info = vk.SwapchainCreateInfoKHR{
         .p_next = settings.p_next_chain,
@@ -159,7 +160,6 @@ pub fn create(
 
     return .{
         .handle = swapchain,
-        .device = device,
         .surface = surface,
         .image_count = image_count,
         .image_format = format.format,
@@ -167,6 +167,8 @@ pub fn create(
         .extent = extent,
         .image_usage = settings.image_usage_flags,
         .present_mode = present_mode,
+        .graphics_queue_family_index = settings.graphics_queue_family_index,
+        .present_queue_family_index = settings.present_queue_family_index,
     };
 }
 
@@ -175,15 +177,15 @@ pub const GetImagesError = error{GetSwapchainImagesFailed} || Device.GetSwapchai
 /// Returns an array of the swapchain's images.
 ///
 /// Buffer is used as the output.
-pub fn getImages(self: *const Swapchain, buffer: []vk.Image) GetImagesError!void {
+pub fn getImages(self: *const Swapchain, device: Device, buffer: []vk.Image) GetImagesError!void {
     var image_count: u32 = 0;
-    var result = try self.device.getSwapchainImagesKHR(self.handle, &image_count, null);
+    var result = try device.getSwapchainImagesKHR(self.handle, &image_count, null);
     if (result != .success) return error.GetSwapchainImagesFailed;
 
     assert(image_count == buffer.len);
 
     while (true) {
-        result = try self.device.getSwapchainImagesKHR(self.handle, &image_count, buffer.ptr);
+        result = try device.getSwapchainImagesKHR(self.handle, &image_count, buffer.ptr);
         if (result == .success) break;
     }
 }
@@ -195,6 +197,7 @@ pub const GetImageViewsError = Device.CreateImageViewError;
 /// Buffer is used as the output.
 pub fn getImageViews(
     self: *const Swapchain,
+    device: Device,
     images: []const vk.Image,
     buffer: []vk.ImageView,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
@@ -204,7 +207,7 @@ pub fn getImageViews(
     @memset(buffer, .null_handle);
     errdefer {
         for (buffer) |view| {
-            if (view != .null_handle) self.device.destroyImageView(view, allocation_callbacks);
+            if (view != .null_handle) device.destroyImageView(view, allocation_callbacks);
         }
     }
 
@@ -228,7 +231,7 @@ pub fn getImageViews(
             },
         };
 
-        image_view.* = try self.device.createImageView(&image_view_info, allocation_callbacks);
+        image_view.* = try device.createImageView(&image_view_info, allocation_callbacks);
     }
 }
 
@@ -240,6 +243,7 @@ pub const GetImageViewsErrorAlloc = Allocator.Error || GetImageViewsError;
 pub fn getImageViewsAlloc(
     self: *const Swapchain,
     allocator: std.mem.Allocator,
+    device: Device,
     images: []const vk.Image,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) GetImageViewsErrorAlloc![]vk.ImageView {
@@ -247,7 +251,7 @@ pub fn getImageViewsAlloc(
     @memset(image_views, .null_handle);
     errdefer {
         for (image_views) |view| {
-            if (view != .null_handle) self.device.destroyImageView(view, allocation_callbacks);
+            if (view != .null_handle) device.destroyImageView(view, allocation_callbacks);
         }
         allocator.free(image_views);
     }
@@ -272,7 +276,7 @@ pub fn getImageViewsAlloc(
             },
         };
 
-        image_view.* = try self.device.createImageView(&image_view_info, allocation_callbacks);
+        image_view.* = try device.createImageView(&image_view_info, allocation_callbacks);
     }
 
     return image_views;
@@ -337,13 +341,12 @@ fn pickExtent(
 }
 
 fn selectMinImageCount(capabilities: *const vk.SurfaceCapabilitiesKHR, desired_min_image_count: ?u32) u32 {
-    const has_max_count = capabilities.max_image_count > 0;
     const target_image_count = desired_min_image_count orelse capabilities.min_image_count;
-    var image_count = target_image_count;
-    if (target_image_count < capabilities.min_image_count)
-        image_count = capabilities.min_image_count
-    else if (has_max_count and target_image_count > capabilities.max_image_count)
-        image_count = capabilities.max_image_count;
+
+    var image_count = @max(target_image_count, capabilities.min_image_count);
+
+    if (capabilities.max_image_count > 0)
+        image_count = @min(image_count, capabilities.max_image_count);
 
     return image_count;
 }

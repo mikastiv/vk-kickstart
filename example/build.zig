@@ -10,12 +10,18 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
-    const translate_c = b.addTranslateC(.{
-        .root_source_file = b.path("src/c.h"),
+    const vulkan = vk_kickstart.module("vulkan");
+
+    const sdl = b.dependency("sdl", .{
         .target = target,
         .optimize = optimize,
     });
-    translate_c.linkSystemLibrary("glfw", .{});
+
+    const vma = b.dependency("vma_zig", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    vma.module("vma-zig").addImport("vulkan", vulkan);
 
     const exe = b.addExecutable(.{
         .name = "kickstart_glfw_example",
@@ -26,12 +32,12 @@ pub fn build(b: *std.Build) !void {
             .link_libc = true,
             .imports = &.{
                 .{ .name = "vk-kickstart", .module = vk_kickstart.module("vk-kickstart") },
-                .{ .name = "vulkan", .module = vk_kickstart.module("vulkan") },
-                .{ .name = "c", .module = translate_c.createModule() },
+                .{ .name = "vulkan", .module = vulkan },
+                .{ .name = "sdl", .module = sdl.module("sdl3") },
+                .{ .name = "vma", .module = vma.module("vma-zig") },
             },
         }),
     });
-    exe.root_module.linkSystemLibrary("glfw", .{});
 
     addShader(b, exe, "shaders/shader.vert", "shader_vert");
     addShader(b, exe, "shaders/shader.frag", "shader_frag");
@@ -53,7 +59,7 @@ pub fn build(b: *std.Build) !void {
 fn addShader(b: *std.Build, step: *std.Build.Step.Compile, path: []const u8, name: []const u8) void {
     const output_name = std.mem.concat(b.allocator, u8, &.{ path, ".spv" }) catch @panic("OOM");
 
-    const shaderc = b.addSystemCommand(&.{ "glslc", "--target-env=vulkan1.2", "-o" });
+    const shaderc = b.addSystemCommand(&.{ "glslc", "--target-env=vulkan1.4", "-o" });
     const shader_spv = shaderc.addOutputFileArg(output_name);
     shaderc.addFileArg(b.path(path));
 

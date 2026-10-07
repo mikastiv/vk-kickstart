@@ -7,6 +7,14 @@
         .vk_kickstart = .{
             .path = "../",
         },
+        .sdl = .{
+            .url = "git+https://github.com/allyourcodebase/SDL#c96b7ae3985139cbe1298dd405ae1d145640ab05",
+            .hash = "sdl-1.0.3+3.4.16-i4QD0VwGqgDmmhfOmpwPL3MnU2bKAwYkLxFO3NvpBw4w",
+        },
+        .vma_zig = .{
+            .url = "git+https://github.com/mikastiv/vma-zig#5b7dc537235ef6a5b946176bbb0cbec83cd05060",
+            .hash = "vma_zig-0.1.0-AoJBtmzkAADVZ1e8nVA5kmbhgtKaxtHLduE6AYoKwmXG",
+        },
     },
     .paths = .{
         "",

@@ -79,14 +79,14 @@ pub fn create(
     if (build_options.verbose) {
         log.debug("----- device creation -----", .{});
         log.debug("queue count: {d}", .{queue_create_infos.len});
-        log.debug("graphics queue family index: {d}", .{physical_device.graphics_queue_index});
-        if (physical_device.present_queue_index) |family| {
+        log.debug("graphics queue family index: {d}", .{physical_device.graphics_queue_family_index});
+        if (physical_device.present_queue_family_index) |family| {
             log.debug("present queue family index: {d}", .{family});
         }
-        if (physical_device.transfer_queue_index) |family| {
+        if (physical_device.transfer_queue_family_index) |family| {
             log.debug("transfer queue family index: {d}", .{family});
         }
-        if (physical_device.compute_queue_index) |family| {
+        if (physical_device.compute_queue_family_index) |family| {
             log.debug("compute queue family index: {d}", .{family});
         }
 
@@ -138,14 +138,14 @@ fn createQueueInfos(
     var unique_queue_families = std.AutoHashMap(u32, void).init(allocator);
     defer unique_queue_families.deinit();
 
-    try unique_queue_families.put(physical_device.graphics_queue_index, {});
-    if (physical_device.present_queue_index) |idx| {
+    try unique_queue_families.put(physical_device.graphics_queue_family_index, {});
+    if (physical_device.present_queue_family_index) |idx| {
         try unique_queue_families.put(idx, {});
     }
-    if (physical_device.transfer_queue_index) |idx| {
+    if (physical_device.transfer_queue_family_index) |idx| {
         try unique_queue_families.put(idx, {});
     }
-    if (physical_device.compute_queue_index) |idx| {
+    if (physical_device.compute_queue_family_index) |idx| {
         try unique_queue_families.put(idx, {});
     }
 

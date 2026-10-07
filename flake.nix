@@ -23,20 +23,29 @@
     in
     {
       devShells = forAllSystems (
-        pkgs: zig: {
+        pkgs: zig:
+        let
+          runtimeLibs = with pkgs; [
+            wayland
+            libdecor
+            libxkbcommon
+            vulkan-loader
+          ];
+        in
+        {
           default = pkgs.mkShell {
+            buildInputs = runtimeLibs;
+
             nativeBuildInputs = with pkgs; [
+              vulkan-validation-layers
+              vulkan-tools
+              glsl_analyzer
+              shaderc
               zig
               zig.zls
-              vulkan-loader
-              vulkan-headers
-              vulkan-tools
-              vulkan-validation-layers
-              vulkan-tools-lunarg
-              glfw
-              shaderc
-              lldb
             ];
+
+            LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (runtimeLibs);
           };
         }
       );
