@@ -24,7 +24,6 @@ const default_message_type: vk.DebugUtilsMessageTypeFlagsEXT = .{
 };
 
 pub const minimum_supported_version = vk.API_VERSION_1_1;
-pub const minimum_supported_version_u32: u32 = @bitCast(vk.API_VERSION_1_1);
 
 pub const CreateSettings = struct {
     /// Application name.
@@ -102,35 +101,33 @@ pub fn create(
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) CreateError!Instance {
     if (settings.required_api_version) |version| {
-        const wanted: u32 = @bitCast(version);
-        assert(wanted >= minimum_supported_version_u32);
+        assert(version.toU32() >= minimum_supported_version.toU32());
     }
 
     dispatch.base_wrapper = vk.BaseWrapper.load(loader);
 
-    const instance_version_u32 = try dispatch.vkb().enumerateInstanceVersion();
-    var instance_version: vk.Version = @bitCast(instance_version_u32);
+    var instance_version: vk.Version = @bitCast(try dispatch.vkb().enumerateInstanceVersion());
 
-    assert(instance_version_u32 >= minimum_supported_version_u32);
+    assert(instance_version.toU32() >= minimum_supported_version.toU32());
 
     if (settings.required_api_version) |req_version| {
-        if (instance_version_u32 < @as(u32, @bitCast(req_version))) {
+        if (instance_version.toU32() < req_version.toU32()) {
             return error.RequiredVersionNotAvailable;
         }
 
         instance_version = req_version;
     } else if (settings.minimum_api_version) |min_version| {
-        if (instance_version_u32 < @as(u32, @bitCast(min_version))) {
+        if (instance_version.toU32() < min_version.toU32()) {
             return error.MinimumVersionNotAvailable;
         }
     }
 
     const app_info = vk.ApplicationInfo{
         .p_application_name = settings.app_name,
-        .application_version = @bitCast(settings.app_version),
+        .application_version = settings.app_version.toU32(),
         .p_engine_name = settings.engine_name,
-        .engine_version = @bitCast(settings.engine_version),
-        .api_version = @bitCast(instance_version),
+        .engine_version = settings.engine_version.toU32(),
+        .api_version = instance_version.toU32(),
     };
 
     const available_extensions = try dispatch.vkb().enumerateInstanceExtensionPropertiesAlloc(null, allocator);

@@ -178,7 +178,7 @@ pub fn main(init: std.process.Init) !void {
             .getInstanceProcAddr = @ptrCast(loader),
             .getDeviceProcAddr = @ptrCast(instance.wrapper.dispatch.vkGetDeviceProcAddr),
         },
-        .vulkan_api_version = @bitCast(physical_device.properties.api_version),
+        .vulkan_api_version = physical_device.properties.api_version,
     };
     const vma_allocator = try vma.Allocator.create(&allocator_ci);
     defer vma_allocator.destroy();
@@ -315,8 +315,6 @@ pub fn main(init: std.process.Init) !void {
         frame_index = (frame_index + 1) % max_frames_in_flight;
 
         const signal_value = next_signal_value;
-        next_signal_value += 1;
-
         const wait_value = signal_value - max_frames_in_flight;
 
         const semaphore_wi: vk.SemaphoreWaitInfo = .{
@@ -384,6 +382,8 @@ pub fn main(init: std.process.Init) !void {
             .p_signal_semaphore_infos = &semaphore_signals,
         };
         try gfx_queue.submit2(@ptrCast(&submit_info), .null_handle);
+
+        next_signal_value += 1;
 
         const present_info: vk.PresentInfoKHR = .{
             .wait_semaphore_count = 1,

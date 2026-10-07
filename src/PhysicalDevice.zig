@@ -6,7 +6,6 @@ const Instance = vk.InstanceProxy;
 const PhysicalDevice = @This();
 const Allocator = std.mem.Allocator;
 
-const minimum_supported_version_u32 = @import("instance.zig").minimum_supported_version_u32;
 const minimum_supported_version = @import("instance.zig").minimum_supported_version;
 
 const log = @import("log.zig").vk_kickstart_log;
@@ -103,8 +102,7 @@ pub fn select(
 ) SelectError!PhysicalDevice {
     assert(instance.handle != .null_handle);
     if (settings.required_api_version) |version| {
-        const wanted: u32 = @bitCast(version);
-        assert(wanted >= minimum_supported_version_u32);
+        assert(version.toU32() >= minimum_supported_version.toU32());
     }
 
     const physical_device_handles = try instance.enumeratePhysicalDevicesAlloc(allocator);
@@ -178,19 +176,19 @@ pub fn select(
 
             log.debug(" available features:", .{});
             printAvailableFeatures(vk.PhysicalDeviceFeatures, info.features);
-            if (info.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_1))) {
+            if (info.properties.api_version >= vk.API_VERSION_1_1.toU32()) {
                 log.debug(" available features (vulkan 1.1):", .{});
                 printAvailableFeatures(vk.PhysicalDeviceVulkan11Features, info.features_11);
             }
-            if (info.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_2))) {
+            if (info.properties.api_version >= vk.API_VERSION_1_2.toU32()) {
                 log.debug(" available features (vulkan 1.2):", .{});
                 printAvailableFeatures(vk.PhysicalDeviceVulkan12Features, info.features_12);
             }
-            if (info.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3))) {
+            if (info.properties.api_version >= vk.API_VERSION_1_3.toU32()) {
                 log.debug(" available features (vulkan 1.3):", .{});
                 printAvailableFeatures(vk.PhysicalDeviceVulkan13Features, info.features_13);
             }
-            if (info.properties.api_version >= @as(u32, @bitCast(vk.API_VERSION_1_4))) {
+            if (info.properties.api_version >= vk.API_VERSION_1_4.toU32()) {
                 log.debug(" available features (vulkan 1.4):", .{});
                 printAvailableFeatures(vk.PhysicalDeviceVulkan14Features, info.features_14);
             }
@@ -429,7 +427,7 @@ fn isDeviceSuitable(
     surface: vk.SurfaceKHR,
     settings: SelectSettings,
 ) !struct { bool, ?UnsuitabilityReason } {
-    if (device.properties.api_version < minimum_supported_version_u32) {
+    if (device.properties.api_version < minimum_supported_version.toU32()) {
         return .{ false, .minimum_supported_version_not_available };
     }
 
@@ -438,11 +436,11 @@ fn isDeviceSuitable(
         if (std.mem.orderZ(u8, n, device_name) != .eq) return .{ false, .no_gpu_name_match };
     }
 
-    const device_version: u32 = @bitCast(device.properties.api_version);
+    const device_version = device.properties.api_version;
     if (settings.required_api_version) |req_version| {
-        if (device_version < @as(u32, @bitCast(req_version))) return .{ false, .required_version_not_available };
+        if (device_version < req_version.toU32()) return .{ false, .required_version_not_available };
     } else if (settings.minimum_api_version) |min_version| {
-        if (device_version < @as(u32, @bitCast(min_version))) return .{ false, .minimum_version_not_available };
+        if (device_version < min_version.toU32()) return .{ false, .minimum_version_not_available };
     }
 
     if (settings.transfer_queue == .dedicated and device.dedicated_transfer_queue_family_index == null) {
@@ -549,13 +547,13 @@ fn getPhysicalDeviceInfo(
     var features_13 = vk.PhysicalDeviceVulkan13Features{};
     var features_14 = vk.PhysicalDeviceVulkan14Features{};
 
-    if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_1)))
+    if (api_version >= vk.API_VERSION_1_1.toU32())
         features.p_next = &features_11;
-    if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_2)))
+    if (api_version >= vk.API_VERSION_1_2.toU32())
         features_11.p_next = &features_12;
-    if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_3)))
+    if (api_version >= vk.API_VERSION_1_3.toU32())
         features_12.p_next = &features_13;
-    if (api_version >= @as(u32, @bitCast(vk.API_VERSION_1_4)))
+    if (api_version >= vk.API_VERSION_1_4.toU32())
         features_13.p_next = &features_14;
 
     instance.getPhysicalDeviceFeatures2(handle, &features);
