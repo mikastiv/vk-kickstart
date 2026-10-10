@@ -28,6 +28,17 @@ const FrameResource = struct {
     };
 };
 
+const GpuImage = struct {
+    handle: vk.Image,
+    view: vk.ImageView,
+    allocation: vma.Allocation,
+
+    fn destroy(self: GpuImage, vma_allocator: vma.Allocator, device: Device) void {
+        device.destroyImageView(self.view, null);
+        vma_allocator.destroyImage(self.handle, self.allocation);
+    }
+};
+
 const Swapchain = struct {
     handle: vk.SwapchainKHR,
     image_count: u32,
@@ -36,24 +47,12 @@ const Swapchain = struct {
     image_format: vk.Format,
     images: []vk.Image,
     image_views: []vk.ImageView,
-    depth_image: vk.Image,
-    depth_image_allocation: vma.Allocation,
-    depth_view: vk.ImageView,
 
-    fn destroy(
-        self: *const Swapchain,
-        allocator: std.mem.Allocator,
-        vma_allocator: vma.Allocator,
-        device: Device,
-    ) void {
+    fn destroy(self: *const Swapchain, allocator: std.mem.Allocator, device: Device) void {
         for (self.image_views) |view| {
             device.destroyImageView(view, null);
         }
-        device.destroyImageView(self.depth_view, null);
-        vma_allocator.destroyImage(self.depth_image, self.depth_image_allocation);
-
         device.destroySwapchainKHR(self.handle, null);
-
         allocator.free(self.image_views);
         allocator.free(self.images);
     }
@@ -184,17 +183,18 @@ pub fn main(init: std.process.Init) !void {
     const depth_format: vk.Format = .d32_sfloat;
     var swapchain = try createSwapchain(
         allocator,
-        vma_allocator,
         instance,
         device,
         &physical_device,
         surface,
-        depth_format,
         window_width,
         window_height,
         .null_handle,
     );
-    defer swapchain.destroy(allocator, vma_allocator, device);
+    defer swapchain.destroy(allocator, device);
+
+    var depth_image = try createDepthImage(vma_allocator, device, swapchain.width, swapchain.height);
+    defer depth_image.destroy(vma_allocator, device);
 
     var render_semaphores = try allocator.alloc(vk.Semaphore, swapchain.image_count);
     defer allocator.free(render_semaphores);
@@ -278,21 +278,23 @@ pub fn main(init: std.process.Init) !void {
             try device.deviceWaitIdle();
 
             const old_swapchain = swapchain;
+            const old_depth_image = depth_image;
 
             swapchain = try createSwapchain(
                 allocator,
-                vma_allocator,
                 instance,
                 device,
                 &physical_device,
                 surface,
-                depth_format,
                 window_width,
                 window_height,
                 old_swapchain.handle,
             );
 
-            old_swapchain.destroy(allocator, vma_allocator, device);
+            depth_image = try createDepthImage(vma_allocator, device, swapchain.width, swapchain.height);
+
+            old_depth_image.destroy(vma_allocator, device);
+            old_swapchain.destroy(allocator, device);
 
             if (old_swapchain.image_count != swapchain.image_count) {
                 for (render_semaphores) |semaphore| {
@@ -345,7 +347,7 @@ pub fn main(init: std.process.Init) !void {
         const image_index = next_image_result.image_index;
         const cb = frame_resource.command_buffer;
 
-        try recordCommandBuffer(cb, &swapchain, image_index, pipeline);
+        try recordCommandBuffer(cb, &swapchain, depth_image, image_index, pipeline);
         try submitCommandBuffer(
             gfx_queue,
             cb.handle,
@@ -427,14 +429,59 @@ fn submitCommandBuffer(
     try queue.submit2(@ptrCast(&submit_info), .null_handle);
 }
 
+fn createDepthImage(vma_allocator: vma.Allocator, device: Device, width: u32, height: u32) !GpuImage {
+    const format: vk.Format = .d32_sfloat;
+    const image_ci: vk.ImageCreateInfo = .{
+        .image_type = .@"2d",
+        .format = format,
+        .extent = .{ .width = width, .height = height, .depth = 1 },
+        .mip_levels = 1,
+        .array_layers = 1,
+        .samples = .{ .@"1" = true },
+        .tiling = .optimal,
+        .usage = .{ .depth_stencil_attachment = true },
+        .initial_layout = .undefined,
+        .sharing_mode = .exclusive,
+    };
+    const alloc_ci: vma.AllocationCreateInfo = .{
+        .flags = .{ .dedicated_memory = true },
+        .usage = .auto,
+        .memory_type_bits = 0,
+        .priority = 0,
+        .min_alignment = 0,
+    };
+    const image, const allocation = try vma_allocator.createImage(&image_ci, &alloc_ci, null);
+    errdefer vma_allocator.destroyImage(image, allocation);
+
+    const view_ci: vk.ImageViewCreateInfo = .{
+        .image = image,
+        .view_type = .@"2d",
+        .format = format,
+        .subresource_range = .{
+            .aspect_mask = .{ .depth = true },
+            .level_count = 1,
+            .layer_count = 1,
+            .base_array_layer = 0,
+            .base_mip_level = 0,
+        },
+        .components = .{ .a = .identity, .r = .identity, .g = .identity, .b = .identity },
+    };
+    const view = try device.createImageView(&view_ci, null);
+    errdefer device.destroyImageView(view, null);
+
+    return .{
+        .handle = image,
+        .view = view,
+        .allocation = allocation,
+    };
+}
+
 fn createSwapchain(
     allocator: std.mem.Allocator,
-    vma_allocator: vma.Allocator,
     instance: Instance,
     device: Device,
     physical_device: *const vkk.PhysicalDevice,
     surface: vk.SurfaceKHR,
-    depth_format: vk.Format,
     width: u32,
     height: u32,
     old_swapchain: vk.SwapchainKHR,
@@ -468,48 +515,6 @@ fn createSwapchain(
         allocator.free(image_views);
     }
 
-    var depth_image_ci: vk.ImageCreateInfo = .{
-        .image_type = .@"2d",
-        .format = depth_format,
-        .extent = .{ .width = swapchain.extent.width, .height = swapchain.extent.height, .depth = 1 },
-        .mip_levels = 1,
-        .array_layers = 1,
-        .samples = .{ .@"1" = true },
-        .tiling = .optimal,
-        .usage = .{ .depth_stencil_attachment = true },
-        .initial_layout = .undefined,
-        .sharing_mode = .exclusive,
-    };
-    const depth_image_alloc_ci: vma.AllocationCreateInfo = .{
-        .flags = .{ .dedicated_memory = true },
-        .usage = .auto,
-        .memory_type_bits = 0,
-        .priority = 0,
-        .min_alignment = 0,
-    };
-    const depth_image, const depth_image_allocation = try vma_allocator.createImage(
-        &depth_image_ci,
-        &depth_image_alloc_ci,
-        null,
-    );
-    errdefer vma_allocator.destroyImage(depth_image, depth_image_allocation);
-
-    var depth_view_ci: vk.ImageViewCreateInfo = .{
-        .image = depth_image,
-        .view_type = .@"2d",
-        .format = depth_format,
-        .subresource_range = .{
-            .aspect_mask = .{ .depth = true },
-            .level_count = 1,
-            .layer_count = 1,
-            .base_array_layer = 0,
-            .base_mip_level = 0,
-        },
-        .components = .{ .a = .identity, .r = .identity, .g = .identity, .b = .identity },
-    };
-    const depth_view = try device.createImageView(&depth_view_ci, null);
-    errdefer device.destroyImageView(depth_view, null);
-
     return .{
         .handle = swapchain.handle,
         .image_count = swapchain.image_count,
@@ -518,15 +523,13 @@ fn createSwapchain(
         .image_format = swapchain.image_format,
         .images = images,
         .image_views = image_views,
-        .depth_image = depth_image,
-        .depth_image_allocation = depth_image_allocation,
-        .depth_view = depth_view,
     };
 }
 
 fn recordCommandBuffer(
     cb: CommandBuffer,
     swapchain: *const Swapchain,
+    depth_image: GpuImage,
     image_index: u32,
     pipeline: vk.Pipeline,
 ) !void {
@@ -562,7 +565,7 @@ fn recordCommandBuffer(
             .dst_access_mask = .{ .depth_stencil_attachment_write = true },
             .old_layout = .undefined,
             .new_layout = .attachment_optimal,
-            .image = swapchain.depth_image,
+            .image = depth_image.handle,
             .subresource_range = .{
                 .aspect_mask = .{ .depth = true },
                 .level_count = 1,
@@ -590,7 +593,7 @@ fn recordCommandBuffer(
         .resolve_image_layout = .undefined,
     };
     const depth_attachment_info: vk.RenderingAttachmentInfo = .{
-        .image_view = swapchain.depth_view,
+        .image_view = depth_image.view,
         .image_layout = .attachment_optimal,
         .load_op = .clear,
         .store_op = .dont_care,
