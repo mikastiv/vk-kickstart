@@ -126,7 +126,7 @@ pub fn main(init: std.process.Init) !void {
         false => .null_handle,
     };
     defer if (debug_mode) {
-        vkk.instance.destroyDebugMessenger(instance, debug_messenger, null);
+        instance.destroyDebugUtilsMessengerEXT(debug_messenger, null);
     };
 
     var surface: vk.SurfaceKHR = .null_handle;

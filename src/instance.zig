@@ -262,16 +262,6 @@ pub fn createDebugMessenger(
     return messenger;
 }
 
-pub fn destroyDebugMessenger(
-    instance: Instance,
-    debug_messenger: vk.DebugUtilsMessengerEXT,
-    allocation_callbacks: ?*const vk.AllocationCallbacks,
-) void {
-    assert(debug_messenger != .null_handle);
-
-    instance.destroyDebugUtilsMessengerEXT(debug_messenger, allocation_callbacks);
-}
-
 fn defaultDebugMessageCallback(
     severity: vk.DebugUtilsMessageSeverityFlagsEXT,
     msg_type: vk.DebugUtilsMessageTypeFlagsEXT,
