@@ -15,7 +15,6 @@ const assert = std.debug.assert;
 /// Max number of unique queues. At this time: graphics, present, compute and transfer.
 pub const max_unique_queues = 4;
 
-allocator: Allocator,
 handle: vk.PhysicalDevice,
 properties: vk.PhysicalDeviceProperties,
 memory_properties: vk.PhysicalDeviceMemoryProperties,
@@ -96,7 +95,7 @@ pub const SelectError = Error ||
     Instance.GetPhysicalDeviceSurfaceFormatsKHRError;
 
 pub fn select(
-    allocator: Allocator,
+    gpa: Allocator,
     instance: Instance,
     settings: SelectSettings,
 ) SelectError!PhysicalDevice {
@@ -104,21 +103,21 @@ pub fn select(
         assert(version.toU32() >= minimum_supported_version.toU32());
     }
 
-    const physical_device_handles = try instance.enumeratePhysicalDevicesAlloc(allocator);
-    defer allocator.free(physical_device_handles);
+    const physical_device_handles = try instance.enumeratePhysicalDevicesAlloc(gpa);
+    defer gpa.free(physical_device_handles);
 
     const instance_version = try dispatch.vkb().enumerateInstanceVersion();
     var physical_device_infos: std.ArrayList(PhysicalDeviceInfo) = .empty;
     defer {
         for (physical_device_infos.items) |*info| {
-            info.deinit(allocator);
+            info.deinit(gpa);
         }
-        physical_device_infos.deinit(allocator);
+        physical_device_infos.deinit(gpa);
     }
 
     for (physical_device_handles) |handle| {
-        const physical_device_info = try getPhysicalDeviceInfo(allocator, instance, handle, settings.surface, instance_version);
-        try physical_device_infos.append(allocator, physical_device_info);
+        const physical_device_info = try getPhysicalDeviceInfo(gpa, instance, handle, settings.surface, instance_version);
+        try physical_device_infos.append(gpa, physical_device_info);
     }
 
     for (physical_device_infos.items) |*info| {
@@ -202,11 +201,11 @@ pub fn select(
     var extensions: std.ArrayList([*:0]const u8) = .empty;
 
     for (settings.required_extensions) |ext| {
-        try extensions.append(allocator, ext);
+        try extensions.append(gpa, ext);
     }
 
     if (selected.portability_ext_available) {
-        try extensions.append(allocator, vk.extensions.khr_portability_subset.name);
+        try extensions.append(gpa, vk.extensions.khr_portability_subset.name);
     }
 
     if (build_options.verbose) {
@@ -215,7 +214,6 @@ pub fn select(
     }
 
     return .{
-        .allocator = allocator,
         .handle = selected.handle,
         .features = settings.required_features,
         .features_11 = if (settings.required_features_11) |features| features else .{},
@@ -224,7 +222,7 @@ pub fn select(
         .features_14 = if (settings.required_features_14) |features| features else .{},
         .properties = selected.properties,
         .memory_properties = selected.memory_properties,
-        .extensions = try extensions.toOwnedSlice(allocator),
+        .extensions = try extensions.toOwnedSlice(gpa),
         .graphics_queue_family_index = selected.graphics_queue_family_index.?,
         .present_queue_family_index = selected.present_queue_family_index,
         .transfer_queue_family_index = switch (settings.transfer_queue) {
@@ -240,8 +238,8 @@ pub fn select(
     };
 }
 
-pub fn deinit(self: *const PhysicalDevice) void {
-    self.allocator.free(self.extensions);
+pub fn deinit(self: *const PhysicalDevice, gpa: Allocator) void {
+    gpa.free(self.extensions);
 }
 
 /// Returns the physical device's name.
@@ -280,9 +278,9 @@ const PhysicalDeviceInfo = struct {
     suitable: bool = true,
     unsuitability_reason: ?UnsuitabilityReason = null,
 
-    fn deinit(self: *PhysicalDeviceInfo, allocator: Allocator) void {
-        allocator.free(self.available_extensions);
-        allocator.free(self.queue_families);
+    fn deinit(self: *PhysicalDeviceInfo, gpa: Allocator) void {
+        gpa.free(self.available_extensions);
+        gpa.free(self.queue_families);
     }
 };
 
@@ -530,7 +528,7 @@ fn isExtensionAvailable(
 }
 
 fn getPhysicalDeviceInfo(
-    allocator: Allocator,
+    gpa: Allocator,
     instance: Instance,
     handle: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
@@ -556,10 +554,10 @@ fn getPhysicalDeviceInfo(
 
     instance.getPhysicalDeviceFeatures2(handle, &features);
 
-    const available_extensions = try instance.enumerateDeviceExtensionPropertiesAlloc(handle, null, allocator);
-    errdefer allocator.free(available_extensions);
-    const queue_families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(handle, allocator);
-    errdefer allocator.free(queue_families);
+    const available_extensions = try instance.enumerateDeviceExtensionPropertiesAlloc(handle, null, gpa);
+    errdefer gpa.free(available_extensions);
+    const queue_families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(handle, gpa);
+    errdefer gpa.free(queue_families);
 
     const graphics_queue_family_index = getQueueStrict(queue_families, .{ .graphics = true }, .{});
     const dedicated_transfer = getQueueStrict(

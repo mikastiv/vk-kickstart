@@ -42,7 +42,7 @@
               glsl_analyzer
               shaderc
               zig
-              # zig.zls
+              zig.zls
             ];
 
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (runtimeLibs);
