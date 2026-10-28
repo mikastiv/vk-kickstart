@@ -67,7 +67,7 @@ fn logSdlError() void {
 pub fn main(init: std.process.Init) !void {
     var debug_allocator: std.heap.SafeAllocator = .init(init.gpa, .{});
 
-    const gpa = switch (debug_mode) {
+    const allocator = switch (debug_mode) {
         true => debug_allocator.allocator(),
         false => init.gpa,
     };
@@ -106,7 +106,7 @@ pub fn main(init: std.process.Init) !void {
     const loader: vk.PfnGetInstanceProcAddr = @ptrCast(sdl.SDL_Vulkan_GetVkGetInstanceProcAddr());
 
     const instance = try vkk.instance.create(
-        gpa,
+        allocator,
         loader,
         .{
             .app_name = "Vulkan",
@@ -118,7 +118,7 @@ pub fn main(init: std.process.Init) !void {
     );
     defer {
         instance.destroyInstance(null);
-        gpa.destroy(instance.wrapper);
+        allocator.destroy(instance.wrapper);
     }
 
     const debug_messenger = switch (debug_mode) {
@@ -141,7 +141,7 @@ pub fn main(init: std.process.Init) !void {
     }
     defer instance.destroySurfaceKHR(surface, null);
 
-    const physical_device = try vkk.PhysicalDevice.select(gpa, instance, .{
+    const physical_device = try vkk.PhysicalDevice.select(allocator, instance, .{
         .surface = surface,
         .preferred_types = &.{.discrete_gpu},
         .minimum_api_version = vk.API_VERSION_1_4,
@@ -154,12 +154,12 @@ pub fn main(init: std.process.Init) !void {
             .dynamic_rendering = .true,
         },
     });
-    defer physical_device.deinit(gpa);
+    defer physical_device.deinit(allocator);
 
-    const device = try vkk.device.create(gpa, instance, &physical_device, null, null);
+    const device = try vkk.device.create(allocator, instance, &physical_device, null, null);
     defer {
         device.destroyDevice(null);
-        gpa.destroy(device.wrapper);
+        allocator.destroy(device.wrapper);
     }
 
     const gfx_queue_handle = device.getDeviceQueue(physical_device.graphics_queue_family_index, 0);
@@ -179,7 +179,7 @@ pub fn main(init: std.process.Init) !void {
 
     const depth_format: vk.Format = .d32_sfloat;
     var swapchain = try createSwapchain(
-        gpa,
+        allocator,
         instance,
         device,
         &physical_device,
@@ -188,13 +188,13 @@ pub fn main(init: std.process.Init) !void {
         window_height,
         .null_handle,
     );
-    defer swapchain.destroy(gpa, device);
+    defer swapchain.destroy(allocator, device);
 
     var depth_image = try createDepthImage(vma_allocator, device, swapchain.width, swapchain.height);
     defer depth_image.destroy(vma_allocator, device);
 
-    var render_semaphores = try gpa.alloc(vk.Semaphore, swapchain.image_count);
-    defer gpa.free(render_semaphores);
+    var render_semaphores = try allocator.alloc(vk.Semaphore, swapchain.image_count);
+    defer allocator.free(render_semaphores);
 
     for (render_semaphores) |*semaphore| {
         semaphore.* = try device.createSemaphore(&.{}, null);
@@ -278,7 +278,7 @@ pub fn main(init: std.process.Init) !void {
             const old_depth_image = depth_image;
 
             swapchain = try createSwapchain(
-                gpa,
+                allocator,
                 instance,
                 device,
                 &physical_device,
@@ -291,15 +291,15 @@ pub fn main(init: std.process.Init) !void {
             depth_image = try createDepthImage(vma_allocator, device, swapchain.width, swapchain.height);
 
             old_depth_image.destroy(vma_allocator, device);
-            old_swapchain.destroy(gpa, device);
+            old_swapchain.destroy(allocator, device);
 
             if (old_swapchain.image_count != swapchain.image_count) {
                 for (render_semaphores) |semaphore| {
                     device.destroySemaphore(semaphore, null);
                 }
-                gpa.free(render_semaphores);
+                allocator.free(render_semaphores);
 
-                render_semaphores = try gpa.alloc(vk.Semaphore, swapchain.image_count);
+                render_semaphores = try allocator.alloc(vk.Semaphore, swapchain.image_count);
                 for (render_semaphores) |*semaphore| {
                     semaphore.* = try device.createSemaphore(&.{}, null);
                 }
